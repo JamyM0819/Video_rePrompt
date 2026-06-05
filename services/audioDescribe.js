@@ -4,7 +4,7 @@ const https = require('https');
 const http = require('http');
 const config = require('../utils/config');
 
-const AUDIO_PROMPT = '转写下面音频中的对话，只输出转写文字，无对话就输出"无语音"。';
+const AUDIO_PROMPT = ''; // qwen3-asr-flash doesn't need a text prompt — ASR is automatic
 
 /**
  * Transcribe speech from an audio segment.
@@ -20,11 +20,10 @@ async function describeAudio(audioPath) {
     if (config.AUDIO_PROVIDER === 'openai') {
       text = await transcribeOpenAI(audioPath);
     } else {
-      // dashscope (default)
+      // dashscope — Qwen3-ASR-Flash via OpenAI-compatible chat/completions
       text = await transcribeDashScope(audioPath);
     }
 
-    // Check if result looks like "no speech" (very short / common phrases)
     const noSpeech = text.length < 3 || /^(无|没有|无语音|无对话|无内容|无声音|\[无语音\])$/.test(text);
     if (!text || text.trim() === '' || noSpeech) {
       return '[未检测到语音内容]';
@@ -36,7 +35,7 @@ async function describeAudio(audioPath) {
   }
 }
 
-// ── DashScope 原生 multimodal API ──
+// ── DashScope Qwen3-ASR-Flash (OpenAI-compatible chat/completions, synchronous) ──
 
 function transcribeDashScope(audioPath) {
   return new Promise((resolve, reject) => {
@@ -45,22 +44,20 @@ function transcribeDashScope(audioPath) {
     const mimeMap = { mp3: 'mpeg', wav: 'wav', m4a: 'mp4', flac: 'flac' };
     const mime = mimeMap[ext] || 'mpeg';
 
+    // qwen3-asr-flash requires content array with ONLY the audio part (no text alongside)
     const payload = JSON.stringify({
       model: config.AUDIO_MODEL,
-      input: {
-        messages: [{
-          role: 'user',
-          content: [
-            { text: AUDIO_PROMPT },
-            { audio: `data:audio/${mime};base64,${fileData.toString('base64')}` },
-          ],
-        }],
-      },
-      parameters: {},
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'audio', audio: `data:audio/${mime};base64,${fileData.toString('base64')}` },
+        ],
+      }],
     });
 
+    // Use the OpenAI-compatible endpoint
     const apiUrl = new URL(config.AUDIO_BASE_URL.replace(/\/?$/, '/') +
-      'api/v1/services/aigc/multimodal-generation/generation');
+      'compatible-mode/v1/chat/completions');
     const transport = apiUrl.protocol === 'https:' ? https : http;
 
     const req = transport.request(apiUrl, {
@@ -78,7 +75,7 @@ function transcribeDashScope(audioPath) {
           return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
         }
         try {
-          const text = JSON.parse(data)?.output?.choices?.[0]?.message?.content?.[0]?.text;
+          const text = JSON.parse(data)?.choices?.[0]?.message?.content;
           resolve(text || '[未检测到语音内容]');
         } catch (e) { reject(e); }
       });
@@ -99,7 +96,6 @@ function transcribeOpenAI(audioPath) {
     const fileData = fs.readFileSync(audioPath);
     const filename = path.basename(audioPath);
 
-    // Build multipart/form-data body
     const parts = [];
     const addPart = (name, value, filename, contentType) => {
       parts.push(Buffer.from(`--${boundary}\r\n`));
@@ -139,7 +135,6 @@ function transcribeOpenAI(audioPath) {
         if (res.statusCode >= 400) {
           return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
         }
-        // Whisper text response is plain text (response_format: text)
         const text = data.trim();
         resolve(text || '[未检测到语音内容]');
       });

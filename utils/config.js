@@ -75,7 +75,7 @@ const audioConfig = {
     // DashScope 原生 multimodal API（非 OpenAI 兼容格式）
     baseUrl: 'https://dashscope.aliyuncs.com',
     apiKey: getDefaultKey() || '',
-    model: 'qwen-audio-turbo-latest',
+    model: 'qwen3-asr-flash',
   },
   openai: {
     // OpenAI Whisper 兼容接口
