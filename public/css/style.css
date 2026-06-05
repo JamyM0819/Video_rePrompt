@@ -67,6 +67,14 @@ body {
   font-size: 0.95rem;
 }
 
+.version-line {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  opacity: 0.5;
+  font-family: 'Consolas', 'Cascadia Code', 'Menlo', monospace;
+}
+
 /* Top-right toolbar */
 .header-toolbar {
   display: flex;

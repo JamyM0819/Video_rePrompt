@@ -62,6 +62,11 @@
   let currentJobStatus = null;
   let cameFromResults = false;   // track navigation for back button in toolbar
 
+  // ── Version display ──
+  fetch('/api/version').then(r => r.json()).then(v => {
+    document.getElementById('versionLine').textContent = `v${v.version} · ${v.hash}`;
+  }).catch(() => {});
+
   // ── Session restore: resume on page refresh ──
   const savedJobId = sessionStorage.getItem('jobId');
   const savedStatus = sessionStorage.getItem('jobStatus');

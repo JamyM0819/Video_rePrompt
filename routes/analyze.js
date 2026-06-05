@@ -9,6 +9,14 @@ const { downloadVideo } = require('../services/downloadVideo');
 
 const router = Router();
 
+const { execSync } = require('child_process');
+
+// Get git hash for version display
+function getGitHash() {
+  try { return execSync('git rev-parse --short HEAD', { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).trim(); }
+  catch { return 'unknown'; }
+}
+
 // In-memory job store: Map<jobId, jobState>
 const jobStore = new Map();
 
@@ -287,6 +295,11 @@ router.post('/clear-cache', (req, res) => {
   results.jobs = `已清理 ${jobCount} 个任务记录`;
 
   res.json({ ok: true, results });
+});
+
+// Version info
+router.get('/version', (req, res) => {
+  res.json({ version: '1.0.0', hash: getGitHash() });
 });
 
 module.exports = { router, jobStore };
