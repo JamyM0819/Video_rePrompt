@@ -151,7 +151,7 @@ function transcribeOpenAI(audioPath) {
  * Transcribe all audio segments sequentially.
  * Never throws — failures become placeholder strings.
  */
-async function describeAllAudio(audioPaths, onProgress) {
+async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   if (!audioPaths || audioPaths.length === 0) return [];
 
   if (config.AUDIO_PROVIDER === 'none') {

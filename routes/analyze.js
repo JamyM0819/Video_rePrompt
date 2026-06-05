@@ -143,7 +143,7 @@ router.post('/analyze', (req, res, next) => {
 
 // Phase 2: user has selected a shot range, now extract + analyze
 router.post('/commit-range', async (req, res) => {
-  const { jobId, startShot, endShot } = req.body;
+  const { jobId, startShot, endShot, customPrompt } = req.body;
 
   const job = jobStore.get(jobId);
   if (!job) {
@@ -169,7 +169,7 @@ router.post('/commit-range', async (req, res) => {
   res.json({ jobId, status: 'extracting' });
 
   setImmediate(() => {
-    runRange(videoPath, jobId, mergeJob, s, e, job.videoName);
+    runRange(videoPath, jobId, mergeJob, s, e, job.videoName, customPrompt);
   });
 });
 

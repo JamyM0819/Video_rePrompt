@@ -56,7 +56,7 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots) {
 /**
  * Phase 2: Analyze selected shot range. Frames already extracted in Phase 1.
  */
-async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName) {
+async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt) {
   const skipAudio = require('../utils/config').AUDIO_PROVIDER === 'none';
 
   try {
@@ -96,8 +96,8 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
     updateJob(jobId, { logLine: `🤖 开始分析 ${totalItems} 项（${framePaths.length} 画面 + ${hasAudio ? audioPaths.length : 0} 台词）...` });
 
     const [visualResults, audioResults] = await Promise.all([
-      describeAllFrames(framePaths, (i) => { visualDone = i + 1; updateProgress(); }),
-      hasAudio ? describeAllAudio(audioPaths, (i) => { audioDone = i + 1; updateProgress(); }) : Promise.resolve(null),
+      describeAllFrames(framePaths, (i) => { visualDone = i + 1; updateProgress(); }, customPrompt),
+      hasAudio ? describeAllAudio(audioPaths, (i) => { audioDone = i + 1; updateProgress(); }, customPrompt) : Promise.resolve(null),
     ]);
 
     updateJob(jobId, { logLine: `✅ 分析完成！编译结果中...` });

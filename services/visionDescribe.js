@@ -9,7 +9,7 @@ const config = require('../utils/config');
  * Supports both DashScope and OpenAI-compatible APIs via config.
  */
 async function describeFrame(framePath, customPrompt) {
-  const prompt = customPrompt || config.VISION_PROMPT;
+  const prompt = config.VISION_PROMPT + (customPrompt ? '\n\n【附加要求】' + customPrompt : '');
 
   try {
     return await callVisionAPI(framePath, prompt);
@@ -98,11 +98,11 @@ function encodeImage(filePath) {
  * Describe all frames sequentially with retry.
  * Never throws — individual failures become error strings.
  */
-async function describeAllFrames(framePaths, onProgress) {
+async function describeAllFrames(framePaths, onProgress, customPrompt) {
   const results = [];
   for (let i = 0; i < framePaths.length; i++) {
     console.log(`[vision] Frame ${i + 1}/${framePaths.length}: sending to API...`);
-    results.push(await describeFrame(framePaths[i]));
+    results.push(await describeFrame(framePaths[i], customPrompt));
     console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars)`);
     if (onProgress) onProgress(i);
   }
