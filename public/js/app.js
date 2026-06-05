@@ -9,8 +9,13 @@
   const uploadError = document.getElementById('uploadError');
   const recentAnalyses = document.getElementById('recentAnalyses');
   const recentList = document.getElementById('recentList');
-  const recentDeleteModeBtn = document.getElementById('recentDeleteModeBtn');
-  const recentDeleteConfirmBtn = document.getElementById('recentDeleteConfirmBtn');
+  const recentManageBtn = document.getElementById('recentManageBtn');
+  const recentManageBar = document.getElementById('recentManageBar');
+  const recentSelectAll = document.getElementById('recentSelectAll');
+  const recentSelectedHint = document.getElementById('recentSelectedHint');
+  const recentMaxCount = document.getElementById('recentMaxCount');
+  const recentDeleteBtn = document.getElementById('recentDeleteBtn');
+  const recentManageDoneBtn = document.getElementById('recentManageDoneBtn');
 
   const tabFile = document.getElementById('tabFile');
   const tabUrl = document.getElementById('tabUrl');
@@ -112,11 +117,22 @@
     renderRecentAnalyses();
   }
 
-  let deleteMode = false;
+  let manageMode = false;
+
+  // Load saved max count from localStorage
+  function getMaxRecentCount() {
+    const v = parseInt(localStorage.getItem('maxRecentCount'));
+    return (v >= 1 && v <= 20) ? v : 6;
+  }
+  function setMaxRecentCount(n) {
+    localStorage.setItem('maxRecentCount', n);
+  }
 
   async function renderRecentAnalyses() {
     try {
       let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      const maxCount = getMaxRecentCount();
+      if (recents.length > maxCount) recents = recents.slice(0, maxCount);
       if (recents.length === 0) {
         recentAnalyses.classList.add('hidden');
         return;
@@ -135,21 +151,22 @@
 
       recents.forEach(r => {
         const card = document.createElement('div');
-        card.className = 'recent-card' + (deleteMode ? ' delete-mode' : '');
+        card.className = 'recent-card' + (manageMode ? ' delete-mode' : '');
         card.dataset.jobId = r.jobId;
         const isAlive = aliveMap.get(r.jobId) !== false;
         card.innerHTML =
-          '<input type="checkbox" class="recent-delete-check"' + (deleteMode ? '' : ' style="display:none"') + ' onclick="event.stopPropagation()">' +
+          '<input type="checkbox" class="recent-delete-check"' + (manageMode ? '' : ' style="display:none"') + '>' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
           '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
           (isAlive
             ? '<div class="recent-card-status">已完成</div>'
             : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>');
         card.addEventListener('click', (e) => {
-          if (e.target.tagName === 'INPUT') return; // don't intercept checkbox clicks
-          if (deleteMode) {
+          if (e.target.tagName === 'INPUT') return;
+          if (manageMode) {
             const cb = card.querySelector('.recent-delete-check');
             cb.checked = !cb.checked;
+            updateManageSelection();
           } else if (isAlive) {
             switchToJob(r.jobId);
           } else {
@@ -159,28 +176,49 @@
         recentList.appendChild(card);
       });
 
-      // Update delete button visibility
-      recentDeleteModeBtn.classList.toggle('hidden', deleteMode);
-      recentDeleteConfirmBtn.classList.toggle('hidden', !deleteMode);
-      if (deleteMode) {
-        recentDeleteModeBtn.classList.add('hidden');
-        recentDeleteConfirmBtn.classList.remove('hidden');
-      } else {
-        recentDeleteModeBtn.classList.remove('hidden');
-        recentDeleteConfirmBtn.classList.add('hidden');
+      // Show/hide management UI
+      recentManageBtn.classList.toggle('hidden', manageMode);
+      recentManageBar.classList.toggle('hidden', !manageMode);
+      if (manageMode) {
+        recentMaxCount.value = maxCount;
+        updateManageSelection();
       }
     } catch { recentAnalyses.classList.add('hidden'); }
   }
 
-  function toggleDeleteMode() {
-    deleteMode = !deleteMode;
+  function updateManageSelection() {
+    const all = recentList.querySelectorAll('.recent-delete-check');
+    const checked = recentList.querySelectorAll('.recent-delete-check:checked');
+    recentSelectAll.checked = all.length > 0 && checked.length === all.length;
+    recentSelectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    recentSelectedHint.textContent = checked.length > 0 ? `已选 ${checked.length} 项` : '';
+  }
+
+  function enterManageMode() {
+    manageMode = true;
     renderRecentAnalyses();
   }
 
-  async function batchDeleteRecents() {
+  function exitManageMode() {
+    manageMode = false;
+    // Save max count
+    const n = parseInt(recentMaxCount.value);
+    if (n >= 1 && n <= 20) {
+      setMaxRecentCount(n);
+      // Trim localStorage if count reduced
+      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      if (recents.length > n) {
+        recents = recents.slice(0, n);
+        localStorage.setItem('recentJobs', JSON.stringify(recents));
+      }
+    }
+    renderRecentAnalyses();
+  }
+
+  async function deleteSelectedRecents() {
     const checked = [...recentList.querySelectorAll('.recent-delete-check:checked')];
-    if (checked.length === 0) { toggleDeleteMode(); return; }
-    if (!confirm('确定要删除选中的 ' + checked.length + ' 条记录吗？')) return;
+    if (checked.length === 0) return;
+    if (!confirm('确定要删除选中的 ' + checked.length + ' 条记录吗？\n\n这将同时清除服务端缓存（视频文件、分析结果等），不可恢复。')) return;
 
     const jobIds = checked.map(cb => cb.closest('.recent-card').dataset.jobId);
 
@@ -189,19 +227,24 @@
     recents = recents.filter(r => !jobIds.includes(r.jobId));
     localStorage.setItem('recentJobs', JSON.stringify(recents));
 
-    // Also delete from server
-    fetch('/api/delete-jobs', {
+    // Delete server-side cache
+    await fetch('/api/delete-jobs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jobIds }),
     }).catch(() => {});
 
-    deleteMode = false;
-    renderRecentAnalyses();
+    exitManageMode();
   }
 
-  // Wire up recent buttons
-  recentDeleteModeBtn.addEventListener('click', toggleDeleteMode);
-  recentDeleteConfirmBtn.addEventListener('click', batchDeleteRecents);
+  // Wire up management buttons
+  recentManageBtn.addEventListener('click', enterManageMode);
+  recentManageDoneBtn.addEventListener('click', exitManageMode);
+  recentDeleteBtn.addEventListener('click', deleteSelectedRecents);
+  recentSelectAll.addEventListener('change', () => {
+    const checked = recentSelectAll.checked;
+    recentList.querySelectorAll('.recent-delete-check').forEach(cb => { cb.checked = checked; });
+    updateManageSelection();
+  });
 
   function saveSession(jobId, status) {
     currentJobId = jobId;
@@ -216,7 +259,8 @@
       let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
       recents = recents.filter(r => r.jobId !== jobId);
       recents.unshift({ jobId, name, shotCount, time: Date.now() });
-      if (recents.length > 6) recents = recents.slice(0, 6);
+      const maxCount = getMaxRecentCount();
+      if (recents.length > maxCount) recents = recents.slice(0, maxCount);
       localStorage.setItem('recentJobs', JSON.stringify(recents));
     } catch {}
   }

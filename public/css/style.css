@@ -554,6 +554,56 @@ body {
   align-items: center;
 }
 
+.recent-manage-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.recent-manage-bar.hidden {
+  display: none;
+}
+
+.recent-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.recent-select-all-label input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.recent-selected-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  min-width: 3em;
+}
+
+.recent-max-input {
+  width: 52px;
+  padding: 4px 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-max-input:focus {
+  border-color: var(--accent);
+}
+
 .recent-list {
   display: flex;
   flex-wrap: wrap;
@@ -570,6 +620,7 @@ body {
   min-width: 200px;
   flex: 1;
   max-width: 320px;
+  position: relative;
 }
 
 .recent-card:hover {

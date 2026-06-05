@@ -346,16 +346,21 @@ router.get('/version', (req, res) => {
   res.json({ version: '1.0.0', hash: getGitHash() });
 });
 
-// Batch delete saved jobs (from disk + memory)
+// Batch delete saved jobs — full cleanup (uploads + outputs + memory)
 router.post('/delete-jobs', (req, res) => {
   const { jobIds } = req.body;
   if (!Array.isArray(jobIds)) return res.status(400).json({ error: '需要 jobIds 数组' });
   let deleted = 0;
   for (const jid of jobIds) {
-    // Remove from disk
+    // Remove entire output directory (frames, audio, result.json, etc.)
     try {
-      const resultPath = path.join(config.OUTPUT_DIR, jid, 'result.json');
-      if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath);
+      const outDir = path.join(config.OUTPUT_DIR, jid);
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
+    } catch {}
+    // Remove entire upload directory (video file)
+    try {
+      const upDir = path.join(config.UPLOAD_DIR, jid);
+      if (fs.existsSync(upDir)) fs.rmSync(upDir, { recursive: true, force: true });
     } catch {}
     // Remove from memory
     if (jobStore.has(jid)) { jobStore.delete(jid); deleted++; }
