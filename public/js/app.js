@@ -9,6 +9,8 @@
   const uploadError = document.getElementById('uploadError');
   const recentAnalyses = document.getElementById('recentAnalyses');
   const recentList = document.getElementById('recentList');
+  const recentDeleteModeBtn = document.getElementById('recentDeleteModeBtn');
+  const recentDeleteConfirmBtn = document.getElementById('recentDeleteConfirmBtn');
 
   const tabFile = document.getElementById('tabFile');
   const tabUrl = document.getElementById('tabUrl');
@@ -110,6 +112,8 @@
     renderRecentAnalyses();
   }
 
+  let deleteMode = false;
+
   async function renderRecentAnalyses() {
     try {
       let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
@@ -131,22 +135,73 @@
 
       recents.forEach(r => {
         const card = document.createElement('div');
-        card.className = 'recent-card';
-        const isAlive = aliveMap.get(r.jobId) !== false; // missing or alive = keep
+        card.className = 'recent-card' + (deleteMode ? ' delete-mode' : '');
+        card.dataset.jobId = r.jobId;
+        const isAlive = aliveMap.get(r.jobId) !== false;
         card.innerHTML =
+          '<input type="checkbox" class="recent-delete-check"' + (deleteMode ? '' : ' style="display:none"') + ' onclick="event.stopPropagation()">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
           '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
           (isAlive
             ? '<div class="recent-card-status">已完成</div>'
             : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>');
-        card.addEventListener('click', () => {
-          if (isAlive) switchToJob(r.jobId);
-          else alert('该任务已在服务端过期（重启后内存清空），请重新上传视频分析。');
+        card.addEventListener('click', (e) => {
+          if (e.target.tagName === 'INPUT') return; // don't intercept checkbox clicks
+          if (deleteMode) {
+            const cb = card.querySelector('.recent-delete-check');
+            cb.checked = !cb.checked;
+          } else if (isAlive) {
+            switchToJob(r.jobId);
+          } else {
+            alert('该任务已在服务端过期（重启后内存清空），请重新上传视频分析。');
+          }
         });
         recentList.appendChild(card);
       });
+
+      // Update delete button visibility
+      recentDeleteModeBtn.classList.toggle('hidden', deleteMode);
+      recentDeleteConfirmBtn.classList.toggle('hidden', !deleteMode);
+      if (deleteMode) {
+        recentDeleteModeBtn.classList.add('hidden');
+        recentDeleteConfirmBtn.classList.remove('hidden');
+      } else {
+        recentDeleteModeBtn.classList.remove('hidden');
+        recentDeleteConfirmBtn.classList.add('hidden');
+      }
     } catch { recentAnalyses.classList.add('hidden'); }
   }
+
+  function toggleDeleteMode() {
+    deleteMode = !deleteMode;
+    renderRecentAnalyses();
+  }
+
+  async function batchDeleteRecents() {
+    const checked = [...recentList.querySelectorAll('.recent-delete-check:checked')];
+    if (checked.length === 0) { toggleDeleteMode(); return; }
+    if (!confirm('确定要删除选中的 ' + checked.length + ' 条记录吗？')) return;
+
+    const jobIds = checked.map(cb => cb.closest('.recent-card').dataset.jobId);
+
+    // Remove from localStorage
+    let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+    recents = recents.filter(r => !jobIds.includes(r.jobId));
+    localStorage.setItem('recentJobs', JSON.stringify(recents));
+
+    // Also delete from server
+    fetch('/api/delete-jobs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobIds }),
+    }).catch(() => {});
+
+    deleteMode = false;
+    renderRecentAnalyses();
+  }
+
+  // Wire up recent buttons
+  recentDeleteModeBtn.addEventListener('click', toggleDeleteMode);
+  recentDeleteConfirmBtn.addEventListener('click', batchDeleteRecents);
 
   function saveSession(jobId, status) {
     currentJobId = jobId;

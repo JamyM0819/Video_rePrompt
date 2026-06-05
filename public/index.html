@@ -70,7 +70,13 @@
 
       <!-- Recent analyses quick access -->
       <div id="recentAnalyses" class="recent-analyses hidden">
-        <h3 class="recent-title">最近分析</h3>
+        <div class="recent-header">
+          <h3 class="recent-title">最近分析</h3>
+          <div class="recent-actions" id="recentActions">
+            <button id="recentDeleteModeBtn" class="tb-btn">管理</button>
+            <button id="recentDeleteConfirmBtn" class="tb-btn hidden" style="border-color:var(--error);color:var(--error)">删除选中</button>
+          </div>
+        </div>
         <div id="recentList" class="recent-list"></div>
       </div>
 

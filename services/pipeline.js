@@ -3,6 +3,8 @@ const { extractFrames } = require('./frameExtract');
 const { describeAllFrames } = require('./visionDescribe');
 const { extractAudioSegments } = require('./audioExtract');
 const { describeAllAudio } = require('./audioDescribe');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Phase 1: Detect scenes, then extract all frame thumbnails for preview.

@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { spawn } = require('child_process');
-const { router, jobStore } = require('./routes/analyze');
+const { router, jobStore, loadSavedJobs } = require('./routes/analyze');
 const config = require('./utils/config');
 const { startCleanupInterval, cleanupAll } = require('./utils/cleanup');
 
@@ -100,6 +100,9 @@ async function checkDependencies() {
 const port = config.PORT;
 
 checkDependencies().then(() => {
+  const savedCount = loadSavedJobs();
+  if (savedCount > 0) console.log(`Reloaded ${savedCount} saved jobs from disk`);
+
   const cleanupTimer = startCleanupInterval(jobStore);
 
   const server = app.listen(port, () => {

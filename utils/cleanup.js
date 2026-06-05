@@ -6,6 +6,20 @@ function cleanupJob(jobId, jobStore) {
   const uploadsDir = path.join(config.UPLOAD_DIR, jobId);
   const outputsDir = path.join(config.OUTPUT_DIR, jobId);
 
+  // Never delete jobs that have been persisted to disk (result.json exists)
+  const resultFile = path.join(outputsDir, 'result.json');
+  try {
+    if (fs.existsSync(resultFile)) {
+      // Keep outputs/, only clean uploads/ if they exist
+      if (fs.existsSync(uploadsDir)) {
+        fs.rmSync(uploadsDir, { recursive: true, force: true });
+      }
+      jobStore.delete(jobId); // remove from memory but keep on disk
+      return;
+    }
+  } catch {}
+
+  // No persistence — clean everything
   for (const dir of [uploadsDir, outputsDir]) {
     try {
       if (fs.existsSync(dir)) {

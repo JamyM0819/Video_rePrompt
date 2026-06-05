@@ -58,6 +58,50 @@ function mergeJob(jobId, partial) {
     delete partial.logLine;
   }
   Object.assign(current, partial);
+  // Persist to disk when done
+  if (current.status === 'done' && current.results) {
+    saveJobToDisk(current);
+  }
+}
+
+// Write job to outputs/jobId/result.json for persistence across restarts
+function saveJobToDisk(job) {
+  try {
+    const dir = path.join(config.OUTPUT_DIR, job.jobId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const data = {
+      jobId: job.jobId,
+      videoName: job.videoName,
+      status: 'done',
+      results: job.results,
+      sceneData: job.sceneData,
+      log: job.log,
+      createdAt: job.createdAt,
+      savedAt: Date.now(),
+    };
+    fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(data), 'utf-8');
+  } catch (e) { console.error('[saveJob] Failed:', e.message); }
+}
+
+// Reload jobs from disk on startup
+function loadSavedJobs() {
+  let count = 0;
+  try {
+    if (!fs.existsSync(config.OUTPUT_DIR)) return 0;
+    const dirs = fs.readdirSync(config.OUTPUT_DIR);
+    for (const dir of dirs) {
+      try {
+        const filePath = path.join(config.OUTPUT_DIR, dir, 'result.json');
+        if (!fs.existsSync(filePath)) continue;
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (jobStore.has(data.jobId)) continue; // already loaded
+        data.savedAt = data.savedAt || data.createdAt;
+        jobStore.set(data.jobId, data);
+        count++;
+      } catch (e) { /* skip corrupt files */ }
+    }
+  } catch (e) { /* skip */ }
+  return count;
 }
 
 // Inject jobId before multer processes the file
@@ -302,4 +346,21 @@ router.get('/version', (req, res) => {
   res.json({ version: '1.0.0', hash: getGitHash() });
 });
 
-module.exports = { router, jobStore };
+// Batch delete saved jobs (from disk + memory)
+router.post('/delete-jobs', (req, res) => {
+  const { jobIds } = req.body;
+  if (!Array.isArray(jobIds)) return res.status(400).json({ error: '需要 jobIds 数组' });
+  let deleted = 0;
+  for (const jid of jobIds) {
+    // Remove from disk
+    try {
+      const resultPath = path.join(config.OUTPUT_DIR, jid, 'result.json');
+      if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath);
+    } catch {}
+    // Remove from memory
+    if (jobStore.has(jid)) { jobStore.delete(jid); deleted++; }
+  }
+  res.json({ ok: true, deleted });
+});
+
+module.exports = { router, jobStore, loadSavedJobs };

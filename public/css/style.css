@@ -537,9 +537,21 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.recent-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .recent-list {
@@ -588,6 +600,25 @@ body {
   background: rgba(52,211,153,0.15);
   color: var(--success);
   margin-top: 6px;
+}
+
+.recent-delete-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--error);
+  display: none;
+}
+
+.recent-card.delete-mode .recent-delete-check {
+  display: block;
+}
+
+.recent-card.delete-mode {
+  border-color: rgba(247,74,92,0.3);
 }
 
 /* Error */
