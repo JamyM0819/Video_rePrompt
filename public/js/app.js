@@ -7,6 +7,8 @@
   const fileInput = document.getElementById('fileInput');
   const browseBtn = document.getElementById('browseBtn');
   const uploadError = document.getElementById('uploadError');
+  const recentAnalyses = document.getElementById('recentAnalyses');
+  const recentList = document.getElementById('recentList');
 
   const tabFile = document.getElementById('tabFile');
   const tabUrl = document.getElementById('tabUrl');
@@ -93,6 +95,29 @@
   } else {
     // Home page — show history
     setToolbar([{type:'history'}]);
+    renderRecentAnalyses();
+  }
+
+  function renderRecentAnalyses() {
+    try {
+      const recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      if (recents.length === 0) {
+        recentAnalyses.classList.add('hidden');
+        return;
+      }
+      recentAnalyses.classList.remove('hidden');
+      recentList.innerHTML = '';
+      recents.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'recent-card';
+        card.innerHTML =
+          '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
+          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
+          '<div class="recent-card-status">已完成</div>';
+        card.addEventListener('click', () => switchToJob(r.jobId));
+        recentList.appendChild(card);
+      });
+    } catch { recentAnalyses.classList.add('hidden'); }
   }
 
   function saveSession(jobId, status) {
@@ -100,6 +125,25 @@
     currentJobStatus = status;
     sessionStorage.setItem('jobId', jobId);
     sessionStorage.setItem('jobStatus', status);
+  }
+
+  // Save completed job info for recent analyses on home page
+  function saveRecent(jobId, name, shotCount) {
+    try {
+      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      recents = recents.filter(r => r.jobId !== jobId);
+      recents.unshift({ jobId, name, shotCount, time: Date.now() });
+      if (recents.length > 6) recents = recents.slice(0, 6);
+      localStorage.setItem('recentJobs', JSON.stringify(recents));
+    } catch {}
+  }
+
+  function removeRecent(jobId) {
+    try {
+      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      recents = recents.filter(r => r.jobId !== jobId);
+      localStorage.setItem('recentJobs', JSON.stringify(recents));
+    } catch {}
   }
 
   function clearSession() {
@@ -234,6 +278,7 @@
   function removeFromHistory(jobId) {
     const h = getJobHistory().filter(id => id !== jobId);
     localStorage.setItem('jobHistory', JSON.stringify(h));
+    removeRecent(jobId);
   }
 
   function loadJobList() {
@@ -473,6 +518,7 @@
             break;
           case 'done':
             saveSession(job.jobId, 'done');
+            if (job.results) saveRecent(job.jobId, job.results.videoFile || '未知', job.results.totalShots);
             stopDetectAnim();
             clearInterval(pollTimer); pollTimer = null;
             setProgress(100, '分析完成！', '');
@@ -609,6 +655,9 @@
       {text:'分析其他镜头',onClick:backToRange},
       {text:'分析新视频',primary:true,onClick:resetToUpload},
     ]);
+
+    // Remember for home page
+    if (r) saveRecent(job.jobId, r.videoFile || '未知', r.totalShots);
   }
 
   function backToRange() {
@@ -668,6 +717,8 @@
     clearCacheBtn.textContent = '清理中...'; clearCacheBtn.disabled = true;
     fetch('/api/clear-cache', { method: 'POST' }).then(r => r.json()).then(data => {
       const parts = []; if (data.results) Object.values(data.results).forEach(v => parts.push(v));
+      localStorage.removeItem('recentJobs');
+      recentAnalyses.classList.add('hidden');
       alert('清理完成：\n' + parts.join('\n'));
     }).catch(e => alert('清理失败：' + e.message)).finally(() => { clearCacheBtn.textContent = '清除缓存'; clearCacheBtn.disabled = false; });
   }

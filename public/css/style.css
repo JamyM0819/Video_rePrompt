@@ -520,6 +520,68 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Recent analyses */
+.recent-analyses {
+  margin-top: 24px;
+}
+
+.recent-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  min-width: 200px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.recent-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.recent-card-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-card-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.recent-card-status {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(52,211,153,0.15);
+  color: var(--success);
+  margin-top: 6px;
+}
+
 /* Error */
 .error-msg {
   margin-top: 12px;
