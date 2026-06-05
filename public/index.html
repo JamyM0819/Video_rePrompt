@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video rePrompt — 视频反推镜头提示词</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-row">
+        <div class="header-left">
+          <h1>Video rePrompt</h1>
+          <p class="subtitle">上传视频或粘贴链接，自动识别每个镜头并生成画面描述提示词</p>
+        </div>
+        <div class="header-toolbar" id="headerToolbar"></div>
+      </div>
+    </header>
+
+    <!-- Upload Section -->
+    <section id="uploadSection" class="upload-section">
+      <!-- Tabs -->
+      <div class="input-tabs">
+        <button id="tabFile" class="input-tab active">上传文件</button>
+        <button id="tabUrl" class="input-tab">粘贴链接</button>
+      </div>
+
+      <!-- File Upload Panel -->
+      <div id="filePanel" class="input-panel">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <p class="drop-text">拖拽视频文件到此处</p>
+          <p class="drop-or">或</p>
+          <label class="browse-btn" id="browseBtn">
+            选择文件
+            <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv,.webm" hidden>
+          </label>
+          <p class="drop-hint">支持 MP4, MOV, AVI, MKV, WebM，最大 2GB</p>
+        </div>
+      </div>
+
+      <!-- URL Panel -->
+      <div id="urlPanel" class="input-panel hidden">
+        <div class="url-zone">
+          <div class="url-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <p class="url-label">粘贴视频链接</p>
+          <div class="url-input-row">
+            <input type="text" id="urlInput" class="url-input" placeholder="https://example.com/video.mp4">
+            <button id="urlSubmitBtn" class="browse-btn">开始分析</button>
+          </div>
+          <p class="drop-hint">支持直链视频 URL（mp4、mov 等），自动下载后分析</p>
+        </div>
+      </div>
+
+      <div id="uploadError" class="error-msg hidden"></div>
+
+      <!-- Shot limit selector -->
+      <div class="settings-row">
+        <span class="settings-label">最多分析镜头数：</span>
+        <input type="number" id="maxShotsInput" class="shots-input" value="100" min="1" max="500" step="1">
+        <span class="settings-hint">数量越多耗时越长</span>
+        <button id="clearCacheBtn" class="btn-clear">清除缓存</button>
+      </div>
+      </div>
+    </section>
+
+    <!-- Progress Section -->
+    <section id="progressSection" class="progress-section hidden">
+      <div class="progress-card">
+        <div class="progress-bar-track">
+          <div id="progressBar" class="progress-bar-fill"></div>
+        </div>
+        <p id="progressLabel" class="progress-label">准备中...</p>
+        <p id="progressDetail" class="progress-detail"></p>
+        <div id="progressLog" class="progress-log"></div>
+      </div>
+    </section>
+
+    <!-- Range Selection Section -->
+    <section id="rangeSection" class="range-section hidden">
+      <div class="range-card">
+        <h3 id="rangeTitle">检测到 <span id="rangeCount">0</span> 个镜头</h3>
+        <p class="range-subtitle">拖拽滑块选择要分析的镜头范围</p>
+        <div class="range-slider-wrap">
+          <input type="range" id="rangeStart" class="range-input" min="1" value="1">
+          <input type="range" id="rangeEnd" class="range-input" min="1" value="1">
+          <div class="range-track"></div>
+          <div class="range-fill" id="rangeFill"></div>
+        </div>
+        <div class="range-labels">
+          <span id="rangeLabelStart">镜头 1</span>
+          <span id="rangeLabelEnd">镜头 1</span>
+        </div>
+        <div class="range-input-row">
+          <label class="range-input-label">从</label>
+          <input type="number" id="rangeStartNum" class="range-num" min="1" value="1">
+          <label class="range-input-label">到</label>
+          <input type="number" id="rangeEndNum" class="range-num" min="1" value="10">
+          <span class="range-input-unit">（共 <span id="rangeSelectedCount">10</span> 个）</span>
+        </div>
+        <button id="rangeConfirmBtn" class="browse-btn">开始分析选中范围</button>
+        <div class="filmstrip-wrap">
+          <div id="filmstrip" class="filmstrip"></div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="resultsSection" class="results-section hidden">
+      <div class="results-header">
+        <div class="results-summary">
+          <h2 id="resultsTitle">分析结果</h2>
+          <p id="resultsMeta"></p>
+        </div>
+        <div class="results-actions">
+          <button id="copyAllBtn" class="btn-copy">复制全部描述</button>
+          <button id="exportBtn" class="btn-export">导出为文件</button>
+        </div>
+      </div>
+      <div id="shotsTimeline" class="shots-timeline"></div>
+      <div class="results-footer">
+        <button id="copyAllBtn2" class="btn-copy">复制全部描述</button>
+        <button id="exportBtn2" class="btn-export">导出为文件</button>
+      </div>
+    </section>
+
+    <!-- Error Section -->
+    <section id="errorSection" class="error-section hidden">
+      <div class="error-card">
+        <h3>处理失败</h3>
+        <p id="errorMessage"></p>
+        <button id="retryBtn" class="browse-btn">重新上传</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div id="lightbox" class="lightbox hidden">
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-content">
+      <button id="lightboxClose" class="lightbox-close">&times;</button>
+      <img id="lightboxImg" src="" alt="Full frame">
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
