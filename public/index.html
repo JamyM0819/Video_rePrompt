@@ -74,13 +74,11 @@
         <div id="recentList" class="recent-list"></div>
       </div>
 
-      <!-- Shot limit selector -->
+      <!-- Settings -->
       <div class="settings-row">
-        <span class="settings-label">最多分析镜头数：</span>
-        <input type="number" id="maxShotsInput" class="shots-input" value="100" min="1" max="500" step="1">
-        <span class="settings-hint">数量越多耗时越长</span>
+        <span class="settings-label">附加提示词：</span>
+        <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="可选，追加到分析和转写指令中">
         <button id="clearCacheBtn" class="btn-clear">清除缓存</button>
-      </div>
       </div>
     </section>
 

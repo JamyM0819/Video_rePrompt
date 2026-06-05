@@ -16,7 +16,6 @@
   const urlPanel = document.getElementById('urlPanel');
   const urlInput = document.getElementById('urlInput');
   const urlSubmitBtn = document.getElementById('urlSubmitBtn');
-  const maxShotsInput = document.getElementById('maxShotsInput');
   const clearCacheBtn = document.getElementById('clearCacheBtn');
 
   const progressSection = document.getElementById('progressSection');
@@ -78,7 +77,11 @@
       // Jump to range selector
       progressSection.classList.add('hidden');
       rangeSection.classList.remove('hidden');
-      fetch('/api/jobs/' + savedJobId).then(r => r.json()).then(job => {
+      fetch('/api/jobs/' + savedJobId).then(r => {
+        if (!r.ok) { resetToUpload(); return; }
+        return r.json();
+      }).then(job => {
+        if (!job) return;
         if (job.sceneData) showRangeSelector(job.sceneData);
         else resetToUpload();
       }).catch(() => resetToUpload());
@@ -86,7 +89,11 @@
       // Jump to results
       progressSection.classList.add('hidden');
       rangeSection.classList.add('hidden');
-      fetch('/api/jobs/' + savedJobId).then(r => r.json()).then(job => {
+      fetch('/api/jobs/' + savedJobId).then(r => {
+        if (!r.ok) { resetToUpload(); showError('任务已过期（服务重启后内存清空），请重新上传。'); return; }
+        return r.json();
+      }).then(job => {
+        if (!job) return;
         if (job.results) showResults(job);
         else resetToUpload();
       }).catch(() => resetToUpload());
@@ -103,23 +110,39 @@
     renderRecentAnalyses();
   }
 
-  function renderRecentAnalyses() {
+  async function renderRecentAnalyses() {
     try {
-      const recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
       if (recents.length === 0) {
         recentAnalyses.classList.add('hidden');
         return;
       }
       recentAnalyses.classList.remove('hidden');
       recentList.innerHTML = '';
+
+      // Verify which jobs still exist on server, mark expired ones
+      const checkResults = await Promise.allSettled(
+        recents.map(r => fetch('/api/jobs/' + r.jobId).then(res => ({ jobId: r.jobId, alive: res.ok })))
+      );
+      const aliveMap = new Map();
+      checkResults.forEach(r => {
+        if (r.status === 'fulfilled' && r.value) aliveMap.set(r.value.jobId, r.value.alive);
+      });
+
       recents.forEach(r => {
         const card = document.createElement('div');
         card.className = 'recent-card';
+        const isAlive = aliveMap.get(r.jobId) !== false; // missing or alive = keep
         card.innerHTML =
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
           '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
-          '<div class="recent-card-status">已完成</div>';
-        card.addEventListener('click', () => switchToJob(r.jobId));
+          (isAlive
+            ? '<div class="recent-card-status">已完成</div>'
+            : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>');
+        card.addEventListener('click', () => {
+          if (isAlive) switchToJob(r.jobId);
+          else alert('该任务已在服务端过期（重启后内存清空），请重新上传视频分析。');
+        });
         recentList.appendChild(card);
       });
     } catch { recentAnalyses.classList.add('hidden'); }
@@ -143,7 +166,7 @@
     } catch {}
   }
 
-  function removeRecent(jobId) {
+  function deleteRecent(jobId) {
     try {
       let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
       recents = recents.filter(r => r.jobId !== jobId);
@@ -283,7 +306,7 @@
   function removeFromHistory(jobId) {
     const h = getJobHistory().filter(id => id !== jobId);
     localStorage.setItem('jobHistory', JSON.stringify(h));
-    removeRecent(jobId);
+    deleteRecent(jobId);
   }
 
   function loadJobList() {
@@ -383,8 +406,12 @@
     try {
       const res = await fetch('/api/jobs/' + jobId);
       if (!res.ok) {
-        removeFromHistory(jobId);
-        return resetToUpload();
+        // Job expired on server — show as expired in recent list, don't delete
+        progressSection.classList.add('hidden');
+        errorSection.classList.remove('hidden');
+        errorMessage.textContent = '该任务已在服务端过期（重启后内存清空），无法恢复。请重新上传视频分析。';
+        setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+        return;
       }
       const job = await res.json();
       currentJobId = job.jobId;
@@ -447,7 +474,7 @@
     xhr.addEventListener('error', () => showError('网络错误'));
     xhr.addEventListener('abort', () => showError('上传已取消'));
     const fd = new FormData(); fd.append('video', file);
-    xhr.open('POST', '/api/analyze' + (maxShotsInput.value ? '?maxShots=' + encodeURIComponent(maxShotsInput.value) : ''));
+    xhr.open('POST', '/api/analyze');
     xhr.send(fd);
   }
 
@@ -465,7 +492,7 @@
     setProgress(0, '正在下载视频...', '');
     urlSubmitBtn.disabled = true; urlSubmitBtn.classList.add('btn-loading');
     try {
-      const res = await fetch('/api/analyze-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, maxShots: maxShotsInput.value || undefined }) });
+      const res = await fetch('/api/analyze-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '请求失败 (HTTP ' + res.status + ')'); }
       const { jobId } = await res.json();
       saveSession(jobId, 'downloading'); startDetectAnim(); pollJob(jobId);
