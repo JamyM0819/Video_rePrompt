@@ -706,6 +706,14 @@
   lightbox.querySelector('.lightbox-backdrop').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 
+  // Persist min shot duration
+  const minShotDuration = document.getElementById('minShotDuration');
+  const savedMinShot = localStorage.getItem('minShotDuration');
+  if (savedMinShot) minShotDuration.value = savedMinShot;
+  minShotDuration.addEventListener('change', () => {
+    localStorage.setItem('minShotDuration', minShotDuration.value);
+  });
+
   // ── Range slider ──
   function updateRangeFill() {
     const min = parseInt(rangeStart.min), max = parseInt(rangeStart.max);
@@ -756,7 +764,7 @@
     setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n') }),
+      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0 }),
     }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
@@ -923,7 +931,8 @@
     xhr.addEventListener('error', () => showError('网络错误'));
     xhr.addEventListener('abort', () => showError('上传已取消'));
     const fd = new FormData(); fd.append('video', file);
-    xhr.open('POST', '/api/analyze');
+    const minDur = document.getElementById('minShotDuration').value || '1.0';
+    xhr.open('POST', '/api/analyze?minShotDuration=' + minDur);
     xhr.send(fd);
   }
 

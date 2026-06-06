@@ -10,11 +10,13 @@ const path = require('path');
  * Phase 1: Detect scenes, then extract all frame thumbnails for preview.
  * Returns sceneData with frame URLs so frontend can show a filmstrip.
  */
-async function detectOnly(videoPath, jobId, updateJob, maxShots) {
-  updateJob(jobId, { status: 'detecting_scenes', logLine: '🔍 开始检测镜头切换...' });
+async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration) {
+  const minDur = minShotDuration != null ? parseFloat(minShotDuration) : null;
+  const durMsg = minDur != null ? ` (最短镜头 ≤${minDur}s)` : '';
+  updateJob(jobId, { status: 'detecting_scenes', logLine: `🔍 开始检测镜头切换${durMsg}...` });
 
   const t0 = Date.now();
-  const scenes = await detectScenes(videoPath, jobId, maxShots);
+  const scenes = await detectScenes(videoPath, jobId, maxShots, minDur);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   updateJob(jobId, { logLine: `✅ 检测到 ${scenes.length} 个镜头（耗时 ${elapsed}s）` });
 
@@ -56,13 +58,14 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots) {
 /**
  * Phase 2: Analyze selected shot range. Frames already extracted in Phase 1.
  */
-async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt) {
+async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt, minShotDuration) {
   const skipAudio = require('../utils/config').AUDIO_PROVIDER === 'none';
 
   try {
     updateJob(jobId, { logLine: `🎬 开始处理镜头 ${startShot + 1} ~ ${endShot + 1}...` });
 
-    const allScenes = await detectScenes(videoPath, jobId, Infinity);
+    const minDur = minShotDuration != null ? parseFloat(minShotDuration) : null;
+    const allScenes = await detectScenes(videoPath, jobId, Infinity, minDur);
     const selectedScenes = allScenes.slice(startShot, endShot + 1);
 
     // Frames are already on disk from Phase 1 — just collect paths

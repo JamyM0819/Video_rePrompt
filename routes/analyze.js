@@ -247,8 +247,9 @@ router.post('/analyze', (req, res, next) => {
   jobStore.set(jobId, job);
 
   // Phase 1: detect scenes only, then wait for user range selection
+  const minShotDuration = req.query.minShotDuration;
   setImmediate(() => {
-    detectOnly(videoPath, jobId, mergeJob, maxShots);
+    detectOnly(videoPath, jobId, mergeJob, maxShots, minShotDuration);
   });
 
   res.json({ jobId, status: 'received' });
@@ -256,7 +257,7 @@ router.post('/analyze', (req, res, next) => {
 
 // Phase 2: user has selected a shot range, now extract + analyze
 router.post('/commit-range', async (req, res) => {
-  const { jobId, startShot, endShot, customPrompt } = req.body;
+  const { jobId, startShot, endShot, customPrompt, minShotDuration } = req.body;
 
   const job = jobStore.get(jobId);
   if (!job) {
@@ -288,13 +289,13 @@ router.post('/commit-range', async (req, res) => {
   res.json({ jobId, status: 'extracting' });
 
   setImmediate(() => {
-    runRange(videoPath, jobId, mergeJob, s, e, job.videoName, customPrompt);
+    runRange(videoPath, jobId, mergeJob, s, e, job.videoName, customPrompt, minShotDuration);
   });
 });
 
 // Analyze from URL: download video, then detect scenes, wait for range
 router.post('/analyze-url', async (req, res) => {
-  const { url, maxShots: _ms } = req.body;
+  const { url, maxShots: _ms, minShotDuration } = req.body;
   const maxShots = parseInt(_ms) || undefined;
 
   if (!url) {
@@ -340,7 +341,7 @@ router.post('/analyze-url', async (req, res) => {
       };
 
       // Phase 1: detect scenes, then wait for range
-      await detectOnly(result.path, jobId, mergeJob, maxShots);
+      await detectOnly(result.path, jobId, mergeJob, maxShots, minShotDuration);
     } catch (err) {
       jobStore.get(jobId).status = 'error';
       jobStore.get(jobId).error = 'Download failed: ' + err.message;
@@ -463,7 +464,7 @@ router.post('/re-extract-frames/:jobId', async (req, res) => {
   res.json({ ok: true });
 
   setImmediate(() => {
-    detectOnly(videoPath, job.jobId, mergeJob, undefined);
+    detectOnly(videoPath, job.jobId, mergeJob, undefined, req.query.minShotDuration);
   });
 });
 

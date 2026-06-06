@@ -7,28 +7,38 @@ const config = require('../utils/config');
  * Run PySceneDetect to get scene start/end timestamps.
  * Returns: [{ startTime, endTime }] in seconds.
  */
-async function detectScenes(videoPath, jobId, maxShots) {
+async function detectScenes(videoPath, jobId, maxShots, minDuration) {
   const limit = maxShots || config.MAX_SHOTS;
   const outputDir = path.join(config.OUTPUT_DIR, jobId);
   fs.mkdirSync(outputDir, { recursive: true });
 
   const csvPath = path.join(outputDir, 'scenes.csv');
-  // PySceneDetect 0.7+ syntax: global -i video, then commands with their own options
-  const args = [
-    '-m', 'scenedetect',
-    '-i', videoPath,
-    '-q',
-    'detect-content',
-    'list-scenes',
-    '-o', outputDir,
-    '-f', 'scenes.csv',
-    '-q',
-  ];
+  // Build PySceneDetect args: use detect-adaptive for fast cuts (<0.5s), detect-content otherwise
+  // -m (min-scene-len) tells PySceneDetect the minimum scene duration in frames (~30fps)
+  const useAdaptive = minDuration != null && minDuration < 0.5;
+  const minSceneLen = minDuration != null ? Math.max(1, Math.round(minDuration * 30)) : 15;
+  let args;
+  if (useAdaptive) {
+    args = [
+      '-m', 'scenedetect', '-i', videoPath, '-q',
+      'detect-adaptive', '-m', String(minSceneLen),
+      'list-scenes', '-o', outputDir, '-f', 'scenes.csv', '-q',
+    ];
+  } else {
+    const threshold = minDuration != null
+      ? Math.max(8, Math.min(50, Math.round(10 + minDuration * 17)))
+      : 27;
+    args = [
+      '-m', 'scenedetect', '-i', videoPath, '-q',
+      'detect-content', '-t', String(threshold), '-m', String(minSceneLen),
+      'list-scenes', '-o', outputDir, '-f', 'scenes.csv', '-q',
+    ];
+  }
 
   try {
     await runPython(args);
     if (fs.existsSync(csvPath)) {
-      return parseSceneCSV(csvPath, limit);
+      return parseSceneCSV(csvPath, limit, minDuration);
     }
   } catch (err) {
     console.error('[sceneDetect] PySceneDetect failed:', err.message);
@@ -36,9 +46,10 @@ async function detectScenes(videoPath, jobId, maxShots) {
 
   // Fallback 1: ffmpeg scdet filter
   try {
-    console.log('[sceneDetect] Falling back to ffmpeg scdet...');
-    const scenes = await detectWithFFmpeg(videoPath);
-    if (scenes.length > 0) return mergeShortScenes(scenes, limit);
+    const ffThresh = minDuration != null ? Math.max(2, Math.round(10 * 0.3 / (minDuration || 0.3))) : 10;
+    console.log(`[sceneDetect] Falling back to ffmpeg scdet (threshold=${ffThresh})...`);
+    const scenes = await detectWithFFmpeg(videoPath, ffThresh);
+    if (scenes.length > 0) return mergeShortScenes(scenes, limit, minDuration);
   } catch (err) {
     console.error('[sceneDetect] ffmpeg scdet failed:', err.message);
   }
@@ -63,7 +74,7 @@ function runPython(args) {
   });
 }
 
-function parseSceneCSV(csvPath, maxShots) {
+function parseSceneCSV(csvPath, maxShots, minDuration) {
   const text = fs.readFileSync(csvPath, 'utf-8');
   const lines = text.trim().split('\n');
   const scenes = [];
@@ -80,18 +91,19 @@ function parseSceneCSV(csvPath, maxShots) {
     }
   }
 
-  return mergeShortScenes(scenes, maxShots);
+  return mergeShortScenes(scenes, maxShots, minDuration);
 }
 
 /**
  * ffmpeg scene detection via scdet filter.
  * Parses stderr for lines like: "lavfi.scdet.n=..." containing timestamps.
  */
-function detectWithFFmpeg(videoPath) {
+function detectWithFFmpeg(videoPath, scdetThreshold) {
   return new Promise((resolve, reject) => {
+    const thresh = scdetThreshold || 10;
     const args = [
       '-i', videoPath,
-      '-filter:v', 'scdet=threshold=10',
+      '-filter:v', `scdet=threshold=${thresh}`,
       '-f', 'null', '-',
     ];
     const proc = spawn(config.FFMPEG_PATH, args, {
@@ -223,17 +235,19 @@ function getVideoDuration(videoPath) {
 }
 
 /** Merge scenes shorter than MIN_SHOT_DURATION into neighbors */
-function mergeShortScenes(scenes, maxShots) {
+function mergeShortScenes(scenes, maxShots, minDuration) {
   if (scenes.length <= 1) return scenes;
+
+  const minDur = minDuration != null ? minDuration : config.MIN_SHOT_DURATION;
 
   const merged = [];
   let current = { ...scenes[0] };
 
   for (let i = 1; i < scenes.length; i++) {
     const dur = current.endTime - current.startTime;
-    if (dur < config.MIN_SHOT_DURATION && merged.length > 0) {
+    if (dur < minDur && merged.length > 0) {
       merged[merged.length - 1].endTime = current.endTime;
-    } else if (dur < config.MIN_SHOT_DURATION) {
+    } else if (dur < minDur) {
       current.endTime = scenes[i].endTime;
       continue;
     } else {

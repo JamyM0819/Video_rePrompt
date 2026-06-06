@@ -287,6 +287,44 @@ body {
   justify-content: space-between;
 }
 
+.settings-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.min-shot-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.min-shot-input {
+  width: 48px;
+  padding: 3px 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.min-shot-input:focus {
+  border-color: var(--accent);
+}
+
+.min-shot-unit {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
 .settings-label {
   color: var(--text-secondary);
   font-size: 0.9rem;
