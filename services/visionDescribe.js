@@ -66,7 +66,7 @@ function callVisionAPI(framePath, prompt) {
     const req = transport.request(apiUrl, {
       method: 'POST',
       headers,
-      timeout: 60000,
+      timeout: 120000,
     }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c.toString(); });
@@ -111,29 +111,26 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
   const results = new Array(framePaths.length);
   const timings = new Array(framePaths.length);
   const completedAt = new Array(framePaths.length);
+  let next = 0;
   let done = 0;
 
   console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
   console.log(`[vision] Starting ${framePaths.length} frames (concurrency=${concurrency})...`);
 
-  const worker = async (index) => {
-    const t0 = Date.now();
-    results[index] = await describeFrame(framePaths[index], customPrompt);
-    timings[index] = Date.now() - t0;
-    completedAt[index] = Date.now();
-    done++;
-    console.log(`[vision] Frame ${index + 1}/${framePaths.length}: done (${results[index].length} chars, ${timings[index]}ms)`);
-    if (onProgress) onProgress(done - 1);
+  const worker = async () => {
+    while (next < framePaths.length) {
+      const i = next++;
+      const t0 = Date.now();
+      results[i] = await describeFrame(framePaths[i], customPrompt);
+      timings[i] = Date.now() - t0;
+      completedAt[i] = Date.now();
+      done++;
+      console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars, ${timings[i]}ms)`);
+      if (onProgress) onProgress(done - 1);
+    }
   };
 
-  // Process in batches to limit concurrency
-  for (let i = 0; i < framePaths.length; i += concurrency) {
-    const batch = [];
-    for (let j = i; j < Math.min(i + concurrency, framePaths.length); j++) {
-      batch.push(worker(j));
-    }
-    await Promise.all(batch);
-  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, framePaths.length) }, () => worker()));
 
   return { results, timings, completedAt };
 }

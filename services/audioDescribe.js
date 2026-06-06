@@ -265,27 +265,25 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   const results = new Array(audioPaths.length);
   const timings = new Array(audioPaths.length);
   const completedAt = new Array(audioPaths.length);
+  let next = 0;
   let done = 0;
 
   console.log(`[audioDescribe] Transcribing ${audioPaths.length} segments (concurrency=${concurrency})...`);
 
-  const worker = async (index) => {
-    const t0 = Date.now();
-    results[index] = await describeAudio(audioPaths[index]);
-    timings[index] = Date.now() - t0;
-    completedAt[index] = Date.now();
-    done++;
-    console.log(`[audioDescribe] Segment ${index + 1}/${audioPaths.length}: done (${timings[index]}ms)`);
-    if (onProgress) onProgress(done - 1);
+  const worker = async () => {
+    while (next < audioPaths.length) {
+      const i = next++;
+      const t0 = Date.now();
+      results[i] = await describeAudio(audioPaths[i]);
+      timings[i] = Date.now() - t0;
+      completedAt[i] = Date.now();
+      done++;
+      console.log(`[audioDescribe] Segment ${i + 1}/${audioPaths.length}: done (${timings[i]}ms)`);
+      if (onProgress) onProgress(done - 1);
+    }
   };
 
-  for (let i = 0; i < audioPaths.length; i += concurrency) {
-    const batch = [];
-    for (let j = i; j < Math.min(i + concurrency, audioPaths.length); j++) {
-      batch.push(worker(j));
-    }
-    await Promise.all(batch);
-  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, audioPaths.length) }, () => worker()));
 
   console.log(`[audioDescribe] Done: ${results.length} segments`);
   return { results, timings, completedAt };

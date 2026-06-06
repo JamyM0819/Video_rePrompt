@@ -41,7 +41,8 @@ function extractOneFrame(videoPath, timestamp, outputPath) {
       '-ss', ts,
       '-i', videoPath,
       '-vframes', '1',
-      '-q:v', '2',
+      '-q:v', '8',
+      '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease',
       '-y',
       outputPath,
     ];
@@ -62,7 +63,8 @@ function extractOneFrame(videoPath, timestamp, outputPath) {
           '-i', videoPath,
           '-ss', ts,
           '-vframes', '1',
-          '-q:v', '2',
+          '-q:v', '8',
+          '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease',
           '-y',
           outputPath,
         ];
