@@ -1092,6 +1092,7 @@
     resultsMeta.textContent = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
     resultsMeta.textContent += r.hasAudio ? ' . 含台词识别' : '';
     if (r.duration) resultsMeta.textContent += ' . ' + formatDuration(r.duration);
+    if (r.totalWallMs) resultsMeta.textContent += ' . 耗时 ' + (r.totalWallMs / 1000).toFixed(0) + 's';
 
     // Show active API config in subtle style
     fetch('/api/config').then(cr => cr.json()).then(cfg => {
@@ -1112,7 +1113,7 @@
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
       let html = '<div class="shot-thumb"><img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy"><span class="shot-time-badge">' + time + '</span></div>';
-      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '<span class="shot-timing">视觉 ' + formatMs(shot.visionMs) + ' . 音频 ' + formatMs(shot.audioMs) + '</span></div>';
+      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '<span class="shot-timing">视觉 ' + formatMs(shot.visionMs) + ' . 音频 ' + formatMs(shot.audioMs) + ' . ' + formatCompletedAt(shot.completedAt) + '</span></div>';
       html += '<div class="shot-section-label">画面</div><p class="shot-desc">' + escapeHtml(shot.description) + '</p>';
       if (shot.audioDescription) {
         html += '<div class="shot-section-label audio-label">台词</div><p class="shot-audio-desc">' + escapeHtml(shot.audioDescription) + '</p>';
@@ -1199,6 +1200,7 @@
 
   function formatTimecode(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
   function formatMs(ms) { if (!ms || ms <= 0) return '…'; if (ms < 1000) return ms + 'ms'; return (ms / 1000).toFixed(1) + 's'; }
+  function formatCompletedAt(ts) { if (!ts) return ''; const d = new Date(ts); return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0'); }
   function formatDuration(s) { if (s < 60) return Math.round(s) + '秒'; return Math.floor(s / 60) + '分' + Math.round(s % 60) + '秒'; }
   function formatDate(ts) {
     if (!ts) return '';

@@ -264,6 +264,7 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   const concurrency = parseInt(cfg('AUDIO_CONCURRENCY') || cfg('VISION_CONCURRENCY')) || 3;
   const results = new Array(audioPaths.length);
   const timings = new Array(audioPaths.length);
+  const completedAt = new Array(audioPaths.length);
   let done = 0;
 
   console.log(`[audioDescribe] Transcribing ${audioPaths.length} segments (concurrency=${concurrency})...`);
@@ -272,6 +273,7 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
     const t0 = Date.now();
     results[index] = await describeAudio(audioPaths[index]);
     timings[index] = Date.now() - t0;
+    completedAt[index] = Date.now();
     done++;
     console.log(`[audioDescribe] Segment ${index + 1}/${audioPaths.length}: done (${timings[index]}ms)`);
     if (onProgress) onProgress(done - 1);
@@ -286,7 +288,7 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   }
 
   console.log(`[audioDescribe] Done: ${results.length} segments`);
-  return { results, timings };
+  return { results, timings, completedAt };
 }
 
 module.exports = { describeAudio, describeAllAudio };

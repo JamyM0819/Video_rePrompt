@@ -110,6 +110,7 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
   const concurrency = parseInt(cfg('VISION_CONCURRENCY')) || 5;
   const results = new Array(framePaths.length);
   const timings = new Array(framePaths.length);
+  const completedAt = new Array(framePaths.length);
   let done = 0;
 
   console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
@@ -119,6 +120,7 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
     const t0 = Date.now();
     results[index] = await describeFrame(framePaths[index], customPrompt);
     timings[index] = Date.now() - t0;
+    completedAt[index] = Date.now();
     done++;
     console.log(`[vision] Frame ${index + 1}/${framePaths.length}: done (${results[index].length} chars, ${timings[index]}ms)`);
     if (onProgress) onProgress(done - 1);
@@ -133,7 +135,7 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
     await Promise.all(batch);
   }
 
-  return { results, timings };
+  return { results, timings, completedAt };
 }
 
 module.exports = { describeFrame, describeAllFrames };

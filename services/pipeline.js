@@ -98,21 +98,26 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
 
     updateJob(jobId, { logLine: `🤖 开始分析 ${totalItems} 项（${framePaths.length} 画面 + ${hasAudio ? audioPaths.length : 0} 台词）...` });
 
+    const analysisStart = Date.now();
     const [visionOut, audioOut] = await Promise.all([
       describeAllFrames(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt),
       hasAudio ? describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt) : Promise.resolve(null),
     ]);
+    const analysisEnd = Date.now();
+    const totalWallMs = analysisEnd - analysisStart;
 
     const visualResults = visionOut?.results || visionOut;
     const visualTimings = visionOut?.timings || [];
+    const visualCompletedAt = visionOut?.completedAt || [];
     const audioResults = audioOut?.results || audioOut;
     const audioTimings = audioOut?.timings || [];
+    const audioCompletedAt = audioOut?.completedAt || [];
 
     updateJob(jobId, { logLine: `✅ 分析完成！编译结果中...` });
 
     const totalVisionMs = visualTimings.reduce((s, t) => s + t, 0);
     const totalAudioMs = audioTimings.reduce((s, t) => s + t, 0);
-    updateJob(jobId, { logLine: `⏱ 视觉: ${totalVisionMs / 1000}s / 音频: ${totalAudioMs / 1000}s` });
+    updateJob(jobId, { logLine: `⏱ 总耗时 ${(totalWallMs / 1000).toFixed(0)}s（视觉 ${totalVisionMs / 1000}s / 音频 ${totalAudioMs / 1000}s）` });
 
     const shots = selectedScenes.map((scene, i) => ({
       index: startShot + i,
@@ -123,6 +128,7 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       audioDescription: hasAudio && audioResults[i] ? audioResults[i] : undefined,
       visionMs: visualTimings[i] || 0,
       audioMs: audioTimings[i] || 0,
+      completedAt: visualCompletedAt[i] || audioCompletedAt[i] || analysisEnd,
     }));
 
     updateJob(jobId, {
@@ -133,6 +139,7 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
         videoFile: videoName || videoPath.split(/[\\/]/).pop(),
         totalShots: shots.length, shotRange: `${startShot + 1}-${endShot + 1}`,
         hasAudio, shots,
+        totalWallMs,
       },
     });
   } catch (err) {
