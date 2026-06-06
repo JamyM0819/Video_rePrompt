@@ -3,6 +3,12 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const config = require('../utils/config');
+const overrides = require('../utils/overrides');
+
+function cfg(key) {
+  const v = overrides.get(key);
+  return (v != null && v !== '') ? v : config[key];
+}
 
 const AUDIO_PROMPT = ''; // qwen3-asr-flash doesn't need a text prompt — ASR is automatic
 
@@ -11,16 +17,19 @@ const AUDIO_PROMPT = ''; // qwen3-asr-flash doesn't need a text prompt — ASR i
  * Dispatches to the correct API based on AUDIO_PROVIDER config.
  */
 async function describeAudio(audioPath) {
-  if (config.AUDIO_PROVIDER === 'none') {
+  if (cfg('AUDIO_PROVIDER') === 'none') {
     return '[音频分析已关闭]';
   }
 
   try {
+    const provider = cfg('AUDIO_PROVIDER');
     let text;
-    if (config.AUDIO_PROVIDER === 'openai') {
+    if (provider === 'openai') {
       text = await transcribeOpenAI(audioPath);
+    } else if (provider === 'baidu') {
+      text = await transcribeBaidu(audioPath);
     } else {
-      // dashscope — Qwen3-ASR-Flash via OpenAI-compatible chat/completions
+      // dashscope (default) — Qwen3-ASR-Flash via OpenAI-compatible chat/completions
       text = await transcribeDashScope(audioPath);
     }
 
@@ -46,7 +55,7 @@ function transcribeDashScope(audioPath) {
 
     // qwen3-asr-flash requires content array with ONLY the audio part (no text alongside)
     const payload = JSON.stringify({
-      model: config.AUDIO_MODEL,
+      model: cfg('AUDIO_MODEL'),
       messages: [{
         role: 'user',
         content: [
@@ -56,14 +65,14 @@ function transcribeDashScope(audioPath) {
     });
 
     // Use the OpenAI-compatible endpoint
-    const apiUrl = new URL(config.AUDIO_BASE_URL.replace(/\/?$/, '/') +
+    const apiUrl = new URL(cfg('AUDIO_BASE_URL').replace(/\/?$/, '/') +
       'compatible-mode/v1/chat/completions');
     const transport = apiUrl.protocol === 'https:' ? https : http;
 
     const req = transport.request(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.AUDIO_API_KEY}`,
+        'Authorization': `Bearer ${cfg('AUDIO_API_KEY')}`,
         'Content-Type': 'application/json',
       },
       timeout: 90000,
@@ -88,6 +97,97 @@ function transcribeDashScope(audioPath) {
   });
 }
 
+// ── 百度短语音识别 ──
+
+const { spawn } = require('child_process');
+
+function convertToPcm(inputPath) {
+  return new Promise((resolve, reject) => {
+    // Convert to PCM WAV: 16bit, 16kHz, mono
+    const outPath = inputPath.replace(/\.\w+$/, '') + '_pcm.wav';
+    const proc = spawn(config.FFMPEG_PATH || 'ffmpeg', [
+      '-i', inputPath,
+      '-acodec', 'pcm_s16le',
+      '-ac', '1',
+      '-ar', '16000',
+      '-y',
+      outPath,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let stderr = '';
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.on('close', code => {
+      if (code === 0 && fs.existsSync(outPath)) {
+        resolve(outPath);
+      } else {
+        reject(new Error('PCM conversion failed: ' + stderr.slice(-200)));
+      }
+    });
+    proc.on('error', reject);
+  });
+}
+
+function transcribeBaidu(audioPath) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Convert to PCM first
+      const pcmPath = await convertToPcm(audioPath);
+      const pcmData = fs.readFileSync(pcmPath);
+      // Clean up temp file
+      try { fs.unlinkSync(pcmPath); } catch {}
+
+      const payload = JSON.stringify({
+        format: 'pcm',
+        rate: 16000,
+        dev_pid: 1537,     // 1537 = 普通话 (标准版), 80001 = 极速版
+        channel: 1,
+        cuid: 'video-reprompt',
+        token: cfg('AUDIO_API_KEY'),
+        len: pcmData.length,
+        speech: pcmData.toString('base64'),
+      });
+
+      const apiUrl = new URL(cfg('AUDIO_BASE_URL'));
+      const transport = apiUrl.protocol === 'https:' ? https : http;
+
+      const req = transport.request(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+        timeout: 60000,
+      }, (res) => {
+        let data = '';
+        res.on('data', c => { data += c.toString(); });
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            return reject(new Error('百度 HTTP ' + res.statusCode + ': ' + data.slice(0, 200)));
+          }
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.err_no === 0) {
+              const text = (parsed.result || []).join('');
+              resolve(text || '[未检测到语音内容]');
+            } else {
+              reject(new Error('百度 err_no=' + parsed.err_no + ': ' + (parsed.err_msg || 'unknown')));
+            }
+          } catch (e) {
+            reject(new Error('百度响应解析失败: ' + data.slice(0, 200)));
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('百度超时')); });
+      req.write(payload);
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 // ── OpenAI 兼容 Whisper API ──
 
 function transcribeOpenAI(audioPath) {
@@ -109,7 +209,7 @@ function transcribeOpenAI(audioPath) {
       parts.push(Buffer.from('\r\n'));
     };
 
-    addPart('model', config.AUDIO_MODEL);
+    addPart('model', cfg('AUDIO_MODEL'));
     addPart('file', fileData, filename, 'audio/mpeg');
     addPart('language', 'zh');
     addPart('response_format', 'text');
@@ -117,13 +217,13 @@ function transcribeOpenAI(audioPath) {
 
     const body = Buffer.concat(parts);
 
-    const apiUrl = new URL(config.AUDIO_BASE_URL.replace(/\/?$/, '/') + 'audio/transcriptions');
+    const apiUrl = new URL(cfg('AUDIO_BASE_URL').replace(/\/?$/, '/') + 'audio/transcriptions');
     const transport = apiUrl.protocol === 'https:' ? https : http;
 
     const req = transport.request(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.AUDIO_API_KEY}`,
+        'Authorization': `Bearer ${cfg('AUDIO_API_KEY')}`,
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
         'Content-Length': body.length,
       },
@@ -154,22 +254,26 @@ function transcribeOpenAI(audioPath) {
 async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   if (!audioPaths || audioPaths.length === 0) return [];
 
-  if (config.AUDIO_PROVIDER === 'none') {
+  if (cfg('AUDIO_PROVIDER') === 'none') {
     console.log('[audioDescribe] Audio analysis disabled (AUDIO_PROVIDER=none)');
     return audioPaths.map(() => '[音频分析已关闭]');
   }
 
-  console.log(`[audioDescribe] Transcribing ${audioPaths.length} segments via ${config.AUDIO_PROVIDER}...`);
+  console.log(`[audioDescribe] Active: ${cfg('AUDIO_PROVIDER')}/${cfg('AUDIO_MODEL')} @ ${cfg('AUDIO_BASE_URL')}`);
+  console.log(`[audioDescribe] Transcribing ${audioPaths.length} segments via ${cfg('AUDIO_PROVIDER')}...`);
 
   const results = [];
+  const timings = [];
   for (let i = 0; i < audioPaths.length; i++) {
+    const t0 = Date.now();
     const text = await describeAudio(audioPaths[i]);
+    timings.push(Date.now() - t0);
     results.push(text);
     if (onProgress) onProgress(i);
   }
 
   console.log(`[audioDescribe] Done: ${results.length} segments`);
-  return results;
+  return { results, timings };
 }
 
 module.exports = { describeAudio, describeAllAudio };

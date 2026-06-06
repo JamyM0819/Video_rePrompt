@@ -76,21 +76,35 @@ async function checkDependencies() {
     console.warn('  Install with: pip install scenedetect');
   }
 
-  // Check API keys / providers
-  if (config.VISION_API_KEY) {
-    checks.push(`视觉: ${config.VISION_PROVIDER}/${config.VISION_MODEL}`);
+  // Read overrides to show effective config
+  const overrides = require('./utils/overrides');
+  const visionProvider = overrides.get('VISION_PROVIDER') || config.VISION_PROVIDER;
+  const visionModel = overrides.get('VISION_MODEL') || config.VISION_MODEL;
+  const visionKey = overrides.get('VISION_API_KEY') || config.VISION_API_KEY;
+  const audioProvider = overrides.get('AUDIO_PROVIDER') || config.AUDIO_PROVIDER;
+  const audioModel = overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL;
+  const audioKey = overrides.get('AUDIO_API_KEY') || config.AUDIO_API_KEY;
+  const overridden = overrides.getAll();
+  const overriddenKeys = Object.keys(overridden).filter(k => k !== 'VISION_API_KEY' && k !== 'AUDIO_API_KEY');
+
+  if (visionKey) {
+    const tag = overrides.get('VISION_PROVIDER') ? '[前端]' : '[env]';
+    checks.push(`视觉${tag}: ${visionProvider}/${visionModel}`);
   } else {
-    console.warn('WARNING: VISION_API_KEY not set. 画面分析将失败。');
-    console.warn('  设置环境变量 VISION_API_KEY 或在 .env 文件中配置。');
+    console.warn('WARNING: VISION_API_KEY not set.');
   }
 
-  if (config.AUDIO_PROVIDER === 'none') {
+  if (audioProvider === 'none') {
     checks.push('音频: 已关闭');
-  } else if (config.AUDIO_API_KEY) {
-    checks.push(`音频: ${config.AUDIO_PROVIDER}/${config.AUDIO_MODEL}`);
+  } else if (audioKey) {
+    const tag = overrides.get('AUDIO_PROVIDER') ? '[前端]' : '[env]';
+    checks.push(`音频${tag}: ${audioProvider}/${audioModel}`);
   } else {
-    console.warn('WARNING: AUDIO_API_KEY not set. 语音识别将失败。');
-    console.warn('  设置环境变量 AUDIO_API_KEY 或设 AUDIO_PROVIDER=none 关闭音频分析。');
+    console.warn('WARNING: AUDIO_API_KEY not set.');
+  }
+
+  if (overriddenKeys.length > 0) {
+    console.log('[config] 前端覆盖生效:', overriddenKeys.join(', '));
   }
 
   console.log('Dependency checks:', checks.join(', '));

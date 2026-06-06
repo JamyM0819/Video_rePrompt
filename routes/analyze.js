@@ -4,6 +4,7 @@ const { Router } = require('express');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../utils/config');
+const overrides = require('../utils/overrides');
 const { detectOnly, runRange } = require('../services/pipeline');
 const { downloadVideo } = require('../services/downloadVideo');
 
@@ -104,6 +105,117 @@ function loadSavedJobs() {
   } catch (e) { /* skip */ }
   return count;
 }
+
+// ── Config overrides ──
+router.get('/config', (req, res) => {
+  res.json({
+    VISION_PROVIDER: overrides.get('VISION_PROVIDER') || config.VISION_PROVIDER,
+    VISION_BASE_URL: overrides.get('VISION_BASE_URL') || config.VISION_BASE_URL,
+    VISION_API_KEY: overrides.get('VISION_API_KEY') || config.VISION_API_KEY,
+    VISION_MODEL: overrides.get('VISION_MODEL') || config.VISION_MODEL,
+    AUDIO_PROVIDER: overrides.get('AUDIO_PROVIDER') || config.AUDIO_PROVIDER,
+    AUDIO_BASE_URL: overrides.get('AUDIO_BASE_URL') || config.AUDIO_BASE_URL,
+    AUDIO_API_KEY: overrides.get('AUDIO_API_KEY') || config.AUDIO_API_KEY,
+    AUDIO_MODEL: overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL,
+  });
+});
+
+router.post('/config', (req, res) => {
+  const { VISION_PROVIDER, VISION_BASE_URL, VISION_API_KEY, VISION_MODEL,
+    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL } = req.body;
+  const fields = { VISION_PROVIDER, VISION_BASE_URL, VISION_API_KEY, VISION_MODEL,
+    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL };
+  overrides.apply(fields);
+  console.log('[config] Updated:', Object.keys(fields).filter(k => overrides.get(k)).join(', '));
+  res.json({ ok: true, overrides: overrides.getAll(), active: {
+    VISION_PROVIDER: overrides.get('VISION_PROVIDER') || config.VISION_PROVIDER,
+    VISION_BASE_URL: overrides.get('VISION_BASE_URL') || config.VISION_BASE_URL,
+    VISION_MODEL: overrides.get('VISION_MODEL') || config.VISION_MODEL,
+    AUDIO_PROVIDER: overrides.get('AUDIO_PROVIDER') || config.AUDIO_PROVIDER,
+    AUDIO_BASE_URL: overrides.get('AUDIO_BASE_URL') || config.AUDIO_BASE_URL,
+    AUDIO_MODEL: overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL,
+  }});
+});
+
+// ── Test connection endpoints ──
+
+const https = require('https');
+const http = require('http');
+
+function resolveCfg(k) { return overrides.get(k) || config[k]; }
+
+function testConnection(baseUrl, apiKey, model) {
+  const apiUrl = new URL(baseUrl.replace(/\/?$/, '/') + 'chat/completions');
+  const transport = apiUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 1,
+      stream: false,
+    });
+    const start = Date.now();
+    const req = transport.request(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c.toString(); });
+      res.on('end', () => {
+        // Any response (2xx/4xx) = server reachable. Only 5xx/timeout = failure
+        if (res.statusCode < 500) {
+          const hints = {
+            200: '', 201: '', 202: '',
+            400: ' (服务可达，请求参数不匹配 — 需实际分析时验证)',
+            401: ' (Key 无效)',
+            403: ' (无权限)',
+            404: ' (服务可达，此模型不支持文本对话 — 需实际分析时验证)',
+            429: ' (请求频率限制)',
+          };
+          const hint = hints[res.statusCode] || '';
+          resolve({ ok: true, status: res.statusCode, latency: Date.now() - start, hint });
+        } else {
+          resolve({ ok: false, status: res.statusCode, error: data.slice(0, 200) });
+        }
+      });
+    });
+    req.on('error', e => resolve({ ok: false, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: '超时 (15s)' }); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+router.post('/test-vision', async (req, res) => {
+  const cfg = {
+    baseUrl: req.body.VISION_BASE_URL || resolveCfg('VISION_BASE_URL'),
+    apiKey: req.body.VISION_API_KEY || resolveCfg('VISION_API_KEY'),
+    model: req.body.VISION_MODEL || resolveCfg('VISION_MODEL'),
+  };
+  if (!cfg.apiKey) return res.json({ ok: false, error: 'API Key 未设置' });
+  const result = await testConnection(cfg.baseUrl, cfg.apiKey, cfg.model);
+  res.json(result);
+});
+
+router.post('/test-audio', async (req, res) => {
+  const provider = req.body.AUDIO_PROVIDER || resolveCfg('AUDIO_PROVIDER');
+  if (provider === 'none') return res.json({ ok: true, status: 200, note: '音频已关闭' });
+  const baseUrlRaw = req.body.AUDIO_BASE_URL || resolveCfg('AUDIO_BASE_URL');
+  // DashScope audio uses the OpenAI-compatible endpoint
+  const baseUrl = provider === 'dashscope'
+    ? baseUrlRaw.replace(/\/?$/, '/') + 'compatible-mode/v1'
+    : baseUrlRaw;
+  const apiKey = req.body.AUDIO_API_KEY || resolveCfg('AUDIO_API_KEY');
+  const model = req.body.AUDIO_MODEL || resolveCfg('AUDIO_MODEL');
+  if (!apiKey) return res.json({ ok: false, error: 'API Key 未设置' });
+  const result = await testConnection(baseUrl, apiKey, model);
+  res.json(result);
+});
 
 // Inject jobId before multer processes the file
 router.post('/analyze', (req, res, next) => {

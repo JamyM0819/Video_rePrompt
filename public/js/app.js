@@ -77,6 +77,221 @@
   let recentPerPageCount = 20;
   let allRecents = [];
 
+  // ── Config panel ──
+  const configToggle = document.getElementById('configToggle');
+  const configBody = document.getElementById('configBody');
+  const configSaveBtn = document.getElementById('configSaveBtn');
+  const configStatus = document.getElementById('configStatus');
+  const cfgCustomVision = document.getElementById('cfgVisionProviderCustom');
+  const cfgCustomAudio = document.getElementById('cfgAudioProviderCustom');
+
+  const cfgFields = {
+    VISION_PROVIDER: document.getElementById('cfgVisionProvider'),
+    VISION_BASE_URL: document.getElementById('cfgVisionBaseUrl'),
+    VISION_API_KEY: document.getElementById('cfgVisionApiKey'),
+    VISION_MODEL: document.getElementById('cfgVisionModel'),
+    AUDIO_PROVIDER: document.getElementById('cfgAudioProvider'),
+    AUDIO_BASE_URL: document.getElementById('cfgAudioBaseUrl'),
+    AUDIO_API_KEY: document.getElementById('cfgAudioApiKey'),
+    AUDIO_MODEL: document.getElementById('cfgAudioModel'),
+  };
+
+  // Resolve effective provider value (custom input or select)
+  function getProviderValue(selectEl, customEl) {
+    return selectEl.value === '__custom__' ? customEl.value.trim() || '__custom__' : selectEl.value;
+  }
+
+  function toggleCustomInput(selectEl, customEl) {
+    const isCustom = selectEl.value === '__custom__';
+    customEl.classList.toggle('hidden', !isCustom);
+    if (isCustom) customEl.focus();
+  }
+  cfgFields.VISION_PROVIDER.addEventListener('change', function () {
+    toggleCustomInput(this, cfgCustomVision);
+    const preset = VISION_PRESETS[this.value];
+    if (preset) {
+      cfgFields.VISION_BASE_URL.value = preset.baseUrl || '';
+      cfgFields.VISION_MODEL.value = preset.model || '';
+    }
+  });
+  cfgFields.AUDIO_PROVIDER.addEventListener('change', function () {
+    toggleCustomInput(this, cfgCustomAudio);
+    const preset = AUDIO_PRESETS[this.value];
+    if (preset) {
+      cfgFields.AUDIO_BASE_URL.value = preset.baseUrl || '';
+      cfgFields.AUDIO_MODEL.value = preset.model || '';
+    }
+  });
+
+  // Build a flat payload resolving custom provider inputs
+  function buildConfigPayload() {
+    const p = {};
+    Object.keys(cfgFields).forEach(k => {
+      if (k === 'VISION_PROVIDER') p[k] = getProviderValue(cfgFields.VISION_PROVIDER, cfgCustomVision);
+      else if (k === 'AUDIO_PROVIDER') p[k] = getProviderValue(cfgFields.AUDIO_PROVIDER, cfgCustomAudio);
+      else p[k] = cfgFields[k].value;
+    });
+    return p;
+  }
+
+  function loadConfigFromLocal() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('appConfig') || '{}');
+      Object.keys(cfgFields).forEach(k => {
+        if (saved[k] !== undefined && saved[k] !== null && saved[k] !== '') {
+          cfgFields[k].value = saved[k];
+        }
+      });
+      // Restore custom provider inputs
+      if (saved.VISION_PROVIDER && !VISION_PRESETS[saved.VISION_PROVIDER]) {
+        cfgFields.VISION_PROVIDER.value = '__custom__';
+        cfgCustomVision.value = saved.VISION_PROVIDER;
+        cfgCustomVision.classList.remove('hidden');
+      }
+      if (saved.AUDIO_PROVIDER && !AUDIO_PRESETS[saved.AUDIO_PROVIDER]) {
+        cfgFields.AUDIO_PROVIDER.value = '__custom__';
+        cfgCustomAudio.value = saved.AUDIO_PROVIDER;
+        cfgCustomAudio.classList.remove('hidden');
+      }
+    } catch {}
+  }
+
+  function saveConfigToLocal() {
+    const payload = buildConfigPayload();
+    localStorage.setItem('appConfig', JSON.stringify(payload));
+    return payload;
+  }
+
+  async function applyConfigToServer() {
+    const payload = buildConfigPayload();
+    saveConfigToLocal();
+
+    configSaveBtn.disabled = true;
+    configSaveBtn.textContent = '应用...';
+    configStatus.textContent = '';
+    configStatus.className = 'config-status';
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const result = await res.json();
+      configStatus.textContent = '✓ 已生效' + (result.active ? ' — ' + result.active.VISION_MODEL + ' / ' + result.active.AUDIO_MODEL : '');
+      configStatus.className = 'config-status';
+    } catch (e) {
+      configStatus.textContent = '✕ ' + e.message;
+      configStatus.className = 'config-status error';
+    }
+    configSaveBtn.disabled = false;
+    configSaveBtn.textContent = '保存并应用';
+  }
+
+  configToggle.addEventListener('click', () => {
+    configBody.classList.toggle('hidden');
+  });
+
+  configSaveBtn.addEventListener('click', applyConfigToServer);
+
+  // ── Test connection buttons ──
+
+  async function testConnection(endpoint, btn, resultEl, providerValue, baseUrl, apiKey, model) {
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+    resultEl.classList.add('hidden');
+    resultEl.className = 'config-test-result hidden';
+    try {
+      const payload = {};
+      if (endpoint === 'vision') {
+        // Resolve provider for vision
+        const vp = getProviderValue(cfgFields.VISION_PROVIDER, cfgCustomVision);
+        payload.VISION_PROVIDER = vp;
+        payload.VISION_BASE_URL = baseUrl.value;
+        payload.VISION_API_KEY = apiKey.value;
+        payload.VISION_MODEL = model.value;
+      } else {
+        const ap = getProviderValue(cfgFields.AUDIO_PROVIDER, cfgCustomAudio);
+        payload.AUDIO_PROVIDER = ap;
+        payload.AUDIO_BASE_URL = baseUrl.value;
+        payload.AUDIO_API_KEY = apiKey.value;
+        payload.AUDIO_MODEL = model.value;
+      }
+
+      const res = await fetch('/api/test-' + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const latency = data.latency != null ? ' · ' + data.latency + 'ms' : '';
+        const hint = data.hint || '';
+        resultEl.textContent = '✓ 可达 (HTTP ' + data.status + latency + hint + ')';
+        resultEl.className = 'config-test-result ok';
+      } else {
+        resultEl.textContent = '✕ ' + (data.error || 'HTTP ' + data.status);
+        resultEl.className = 'config-test-result fail';
+      }
+    } catch (e) {
+      resultEl.textContent = '✕ ' + e.message;
+      resultEl.className = 'config-test-result fail';
+    }
+    resultEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = '测试连接';
+  }
+
+  document.getElementById('cfgVisionTest').addEventListener('click', () => {
+    testConnection(
+      'vision',
+      document.getElementById('cfgVisionTest'),
+      document.getElementById('cfgVisionTestResult'),
+      cfgFields.VISION_PROVIDER, cfgFields.VISION_BASE_URL, cfgFields.VISION_API_KEY, cfgFields.VISION_MODEL
+    );
+  });
+  document.getElementById('cfgAudioTest').addEventListener('click', () => {
+    testConnection(
+      'audio',
+      document.getElementById('cfgAudioTest'),
+      document.getElementById('cfgAudioTestResult'),
+      cfgFields.AUDIO_PROVIDER, cfgFields.AUDIO_BASE_URL, cfgFields.AUDIO_API_KEY, cfgFields.AUDIO_MODEL
+    );
+  });
+
+  // Provider presets — auto-fill Base URL & Model when switching provider
+  const VISION_PRESETS = {
+    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
+    openai:     { baseUrl: 'https://api.openai.com/v1',                     model: 'gpt-4o' },
+    anthropic:  { baseUrl: 'https://api.anthropic.com/v1',                  model: 'claude-sonnet-4-20250514' },
+    google:     { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash' },
+    custom:     { baseUrl: '', model: '' },
+  };
+  const AUDIO_PRESETS = {
+    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com', model: 'qwen3-asr-flash' },
+    openai:     { baseUrl: 'https://api.openai.com/v1',       model: 'whisper-1' },
+    custom:     { baseUrl: '', model: '' },
+    none:       { baseUrl: '', model: '' },
+  };
+
+  // Load non-sensitive config from localStorage (provider, baseUrl, model)
+  // API keys are NEVER read from localStorage — user must re-enter them
+  loadConfigFromLocal();
+
+  // On startup, sync non-sensitive fields to server (API keys already on disk)
+  (async () => {
+    const saved = JSON.parse(localStorage.getItem('appConfig') || '{}');
+    if (!saved.VISION_PROVIDER && !saved.AUDIO_PROVIDER) return;
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildConfigPayload()),
+      });
+      console.log('[config] Synced non-sensitive fields to server');
+    } catch { /* server not ready */ }
+  })();
+
   // ── Version display ──
   fetch('/api/version').then(r => r.json()).then(v => {
     document.getElementById('versionLine').textContent = 'v' + v.version + ' ' + v.hash;
@@ -865,13 +1080,27 @@
     resultsMeta.textContent = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
     resultsMeta.textContent += r.hasAudio ? ' . 含台词识别' : '';
     if (r.duration) resultsMeta.textContent += ' . ' + formatDuration(r.duration);
+
+    // Show active API config in subtle style
+    fetch('/api/config').then(cr => cr.json()).then(cfg => {
+      let line = document.getElementById('resultsConfigLine');
+      if (!line) {
+        line = document.createElement('div');
+        line.id = 'resultsConfigLine';
+        line.style.cssText = 'font-size:0.7rem;color:var(--text-secondary);opacity:0.45;margin-top:6px;font-family:monospace';
+        resultsMeta.parentElement.appendChild(line);
+      }
+      line.textContent = '视觉: ' + cfg.VISION_PROVIDER + '/' + cfg.VISION_MODEL +
+                         '    音频: ' + cfg.AUDIO_PROVIDER + '/' + cfg.AUDIO_MODEL;
+    }).catch(() => {});
+
     shotsTimeline.innerHTML = '';
     r.shots.forEach((shot) => {
       const card = document.createElement('div');
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
       let html = '<div class="shot-thumb"><img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy"><span class="shot-time-badge">' + time + '</span></div>';
-      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '</div>';
+      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '<span class="shot-timing">视觉 ' + formatMs(shot.visionMs) + ' . 音频 ' + formatMs(shot.audioMs) + '</span></div>';
       html += '<div class="shot-section-label">画面</div><p class="shot-desc">' + escapeHtml(shot.description) + '</p>';
       if (shot.audioDescription) {
         html += '<div class="shot-section-label audio-label">台词</div><p class="shot-audio-desc">' + escapeHtml(shot.audioDescription) + '</p>';
@@ -957,6 +1186,7 @@
   }
 
   function formatTimecode(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
+  function formatMs(ms) { if (!ms || ms <= 0) return '…'; if (ms < 1000) return ms + 'ms'; return (ms / 1000).toFixed(1) + 's'; }
   function formatDuration(s) { if (s < 60) return Math.round(s) + '秒'; return Math.floor(s / 60) + '分' + Math.round(s % 60) + '秒'; }
   function formatDate(ts) {
     if (!ts) return '';

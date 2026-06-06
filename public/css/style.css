@@ -878,6 +878,170 @@ body {
   padding: 0 2px;
 }
 
+/* Config panel */
+.config-panel {
+  margin-top: 12px;
+}
+
+.config-toggle {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  opacity: 0.7;
+}
+
+.config-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+}
+
+.config-body {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.config-body.hidden {
+  display: none;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+@media (max-width: 700px) {
+  .config-grid { grid-template-columns: 1fr; }
+}
+
+.config-group {}
+
+.config-group-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.config-group label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.config-group label:last-child {
+  margin-bottom: 0;
+}
+
+.config-group input,
+.config-group select {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.config-group input:focus,
+.config-group select:focus {
+  border-color: var(--accent);
+}
+
+.config-group input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.config-custom-input {
+  margin-top: 4px;
+}
+
+.config-custom-input.hidden {
+  display: none;
+}
+
+.config-test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.config-test-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.config-test-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.config-test-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.config-test-result {
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.config-test-result.ok {
+  color: var(--success);
+}
+
+.config-test-result.fail {
+  color: var(--error);
+}
+
+.config-test-result.hidden {
+  display: none;
+}
+
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.config-status {
+  font-size: 0.8rem;
+  color: var(--success);
+}
+
+.config-status.error {
+  color: var(--error);
+}
+
 /* Per-page selector */
 .recent-per-page {
   display: flex;
@@ -1119,6 +1283,16 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 4px;
+}
+
+.shot-timing {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  margin-left: 10px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .shot-desc {

@@ -3,6 +3,13 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const config = require('../utils/config');
+const overrides = require('../utils/overrides');
+
+// Resolve config value: override takes precedence over default
+function cfg(key) {
+  const v = overrides.get(key);
+  return (v != null && v !== '') ? v : config[key];
+}
 
 /**
  * Describe a single frame image using vision AI.
@@ -30,7 +37,7 @@ function callVisionAPI(framePath, prompt) {
   return new Promise((resolve, reject) => {
     const imageUrl = encodeImage(framePath);
     const payload = JSON.stringify({
-      model: config.VISION_MODEL,
+      model: cfg('VISION_MODEL'),
       messages: [{
         role: 'user',
         content: [
@@ -42,7 +49,7 @@ function callVisionAPI(framePath, prompt) {
       max_tokens: 1024,
     });
 
-    const apiUrl = new URL(config.VISION_BASE_URL.replace(/\/?$/, '/') + 'chat/completions');
+    const apiUrl = new URL(cfg('VISION_BASE_URL').replace(/\/?$/, '/') + 'chat/completions');
     const transport = apiUrl.protocol === 'https:' ? https : http;
 
     const headers = {
@@ -51,8 +58,9 @@ function callVisionAPI(framePath, prompt) {
     };
 
     // DashScope uses Bearer, OpenAI-compatible also uses Bearer
-    if (config.VISION_API_KEY) {
-      headers['Authorization'] = `Bearer ${config.VISION_API_KEY}`;
+    const apiKey = cfg('VISION_API_KEY');
+    if (apiKey) {
+      headers['Authorization'] = 'Bearer ' + apiKey;
     }
 
     const req = transport.request(apiUrl, {
@@ -100,13 +108,18 @@ function encodeImage(filePath) {
  */
 async function describeAllFrames(framePaths, onProgress, customPrompt) {
   const results = [];
+  const timings = [];
   for (let i = 0; i < framePaths.length; i++) {
+    if (i === 0) console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
     console.log(`[vision] Frame ${i + 1}/${framePaths.length}: sending to API...`);
+    const t0 = Date.now();
     results.push(await describeFrame(framePaths[i], customPrompt));
-    console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars)`);
+    const ms = Date.now() - t0;
+    timings.push(ms);
+    console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars, ${ms}ms)`);
     if (onProgress) onProgress(i);
   }
-  return results;
+  return { results, timings };
 }
 
 module.exports = { describeFrame, describeAllFrames };

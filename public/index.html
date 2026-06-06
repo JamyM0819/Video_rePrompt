@@ -22,13 +22,11 @@
 
     <!-- Upload Section -->
     <section id="uploadSection" class="upload-section">
-      <!-- Tabs -->
       <div class="input-tabs">
         <button id="tabFile" class="input-tab active">上传文件</button>
         <button id="tabUrl" class="input-tab">粘贴链接</button>
       </div>
 
-      <!-- File Upload Panel -->
       <div id="filePanel" class="input-panel">
         <div id="dropZone" class="drop-zone">
           <div class="drop-icon">
@@ -48,7 +46,6 @@
         </div>
       </div>
 
-      <!-- URL Panel -->
       <div id="urlPanel" class="input-panel hidden">
         <div class="url-zone">
           <div class="url-icon">
@@ -68,7 +65,6 @@
 
       <div id="uploadError" class="error-msg hidden"></div>
 
-      <!-- Recent analyses quick access -->
       <div id="recentAnalyses" class="recent-analyses hidden">
         <div class="recent-header">
           <h3 class="recent-title">最近分析</h3>
@@ -111,6 +107,55 @@
           <button id="customPromptSubmit" class="custom-prompt-submit">添加</button>
         </div>
         <div id="promptHistory" class="prompt-history hidden"></div>
+        <div class="config-panel">
+          <button id="configToggle" class="config-toggle">⚙ 接口配置</button>
+          <div id="configBody" class="config-body hidden">
+            <div class="config-grid">
+              <div class="config-group">
+                <h4 class="config-group-title">视觉模型</h4>
+                <label>Provider
+                  <select id="cfgVisionProvider">
+                    <option value="dashscope">阿里云 DashScope</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic Claude</option>
+                    <option value="google">Google Gemini</option>
+                    <option value="__custom__">自定义</option>
+                  </select>
+                  <input id="cfgVisionProviderCustom" class="config-custom-input hidden" placeholder="输入 Provider 名称">
+                </label>
+                <label>Base URL<input id="cfgVisionBaseUrl" placeholder="https://api.openai.com/v1"></label>
+                <label>API Key<input id="cfgVisionApiKey" type="password" placeholder="sk-xxx"></label>
+                <label>Model<input id="cfgVisionModel" placeholder="gpt-4o"></label>
+                <div class="config-test-row">
+                  <button id="cfgVisionTest" class="config-test-btn">测试连接</button>
+                  <span id="cfgVisionTestResult" class="config-test-result hidden"></span>
+                </div>
+              </div>
+              <div class="config-group">
+                <h4 class="config-group-title">音频/台词模型</h4>
+                <label>Provider
+                  <select id="cfgAudioProvider">
+                    <option value="dashscope">阿里云 DashScope</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="__custom__">自定义</option>
+                    <option value="none">关闭</option>
+                  </select>
+                  <input id="cfgAudioProviderCustom" class="config-custom-input hidden" placeholder="输入 Provider 名称">
+                </label>
+                <label>Base URL<input id="cfgAudioBaseUrl" placeholder="https://api.openai.com/v1"></label>
+                <label>API Key<input id="cfgAudioApiKey" type="password" placeholder="sk-xxx"></label>
+                <label>Model<input id="cfgAudioModel" placeholder="whisper-1"></label>
+                <div class="config-test-row">
+                  <button id="cfgAudioTest" class="config-test-btn">测试连接</button>
+                  <span id="cfgAudioTestResult" class="config-test-result hidden"></span>
+                </div>
+            </div>
+            <div class="config-actions">
+              <button id="configSaveBtn" class="browse-btn">保存并应用</button>
+              <span id="configStatus" class="config-status"></span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -129,7 +174,7 @@
     <!-- Range Selection Section -->
     <section id="rangeSection" class="range-section hidden">
       <div class="range-card">
-        <h3 id="rangeTitle">检测到 <span id="rangeCount">0</span> 个镜头</h3>
+        <h3>检测到 <span id="rangeCount">0</span> 个镜头</h3>
         <p class="range-subtitle">拖拽滑块选择要分析的镜头范围</p>
         <div class="range-slider-wrap">
           <input type="range" id="rangeStart" class="range-input" min="1" value="1">
@@ -152,7 +197,6 @@
         <div class="filmstrip-wrap">
           <div id="filmstrip" class="filmstrip"></div>
         </div>
-      </div>
       </div>
     </section>
 
@@ -185,7 +229,7 @@
     </section>
   </div>
 
-  <!-- Lightbox Modal -->
+  <!-- Lightbox -->
   <div id="lightbox" class="lightbox hidden">
     <div class="lightbox-backdrop"></div>
     <div class="lightbox-content">
