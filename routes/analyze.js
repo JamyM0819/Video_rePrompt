@@ -273,8 +273,14 @@ router.post('/commit-range', async (req, res) => {
   }
 
   // Find video path in uploads
-  const videoFiles = fs.readdirSync(path.join(config.UPLOAD_DIR, jobId));
-  const videoPath = path.join(config.UPLOAD_DIR, jobId, videoFiles[0]);
+  let videoPath;
+  try {
+    const upDir = path.join(config.UPLOAD_DIR, jobId);
+    const videoFiles = fs.readdirSync(upDir);
+    videoPath = path.join(upDir, videoFiles[0]);
+  } catch {
+    return res.status(400).json({ error: '视频文件已被清理，请重新上传后再分析。' });
+  }
 
   job.status = 'extracting';
   job.progress = { stage: 'extracting_frames', current: 0, total: e - s + 1 };
@@ -446,8 +452,13 @@ router.post('/re-extract-frames/:jobId', async (req, res) => {
   const job = jobStore.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: '任务不存在' });
 
-  const videoFiles = fs.readdirSync(path.join(config.UPLOAD_DIR, job.jobId));
-  const videoPath = path.join(config.UPLOAD_DIR, job.jobId, videoFiles[0]);
+  let videoPath;
+  try {
+    const videoFiles = fs.readdirSync(path.join(config.UPLOAD_DIR, job.jobId));
+    videoPath = path.join(config.UPLOAD_DIR, job.jobId, videoFiles[0]);
+  } catch {
+    return res.status(400).json({ error: '视频文件已被清理，请重新上传后再分析。' });
+  }
 
   res.json({ ok: true });
 

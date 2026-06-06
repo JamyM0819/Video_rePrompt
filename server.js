@@ -3,7 +3,6 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { router, jobStore, loadSavedJobs } = require('./routes/analyze');
 const config = require('./utils/config');
-const { startCleanupInterval, cleanupAll } = require('./utils/cleanup');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -117,8 +116,6 @@ checkDependencies().then(() => {
   const savedCount = loadSavedJobs();
   if (savedCount > 0) console.log(`Reloaded ${savedCount} saved jobs from disk`);
 
-  const cleanupTimer = startCleanupInterval(jobStore);
-
   const server = app.listen(port, () => {
     console.log(`Video rePrompt server running at http://localhost:${port}`);
   });
@@ -126,8 +123,6 @@ checkDependencies().then(() => {
   // Graceful shutdown
   const shutdown = () => {
     console.log('\nShutting down...');
-    clearInterval(cleanupTimer);
-    cleanupAll(jobStore);
     server.close(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);
