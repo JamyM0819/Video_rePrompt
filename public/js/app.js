@@ -16,6 +16,7 @@
   const recentDeleteBtn = document.getElementById('recentDeleteBtn');
   const recentManageDoneBtn = document.getElementById('recentManageDoneBtn');
   const recentPerPage = document.getElementById('recentPerPage');
+  const recentSortMode = document.getElementById('recentSortMode');
   const recentPagination = document.getElementById('recentPagination');
 
   const tabFile = document.getElementById('tabFile');
@@ -73,7 +74,7 @@
   let cameFromResults = false;
   let manageMode = false;
   let recentPage = 0;
-  let recentPerPageCount = 8;
+  let recentPerPageCount = 20;
   let allRecents = [];
 
   // ── Version display ──
@@ -126,50 +127,101 @@
 
   function getSavedPerPage() {
     const v = parseInt(localStorage.getItem('recentPerPage'));
-    return (v >= 1 && v <= 50) ? v : 8;
+    return (v >= 1 && v <= 100) ? v : 20;
+  }
+
+  function getSavedSortMode() {
+    return localStorage.getItem('recentSortMode') || 'mtime';
   }
 
   async function renderRecentAnalyses() {
     try {
-      allRecents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
-      if (allRecents.length === 0) {
+      // 1. Load localStorage recents
+      let stored = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+
+      // 2. Sync from server — discover missing jobs and get timestamps
+      const serverJobs = await fetch('/api/jobs').then(r => r.json()).catch(() => []);
+      const serverMap = new Map();
+      serverJobs.forEach(j => {
+        serverMap.set(j.jobId, {
+          jobId: j.jobId,
+          name: j.videoName || '未知视频',
+          shotCount: j.totalShots || 0,
+          createdAt: j.createdAt || 0,
+          savedAt: j.savedAt || j.createdAt || 0,
+        });
+      });
+
+      // Merge: add server jobs missing from localStorage
+      const storedIds = new Set(stored.map(r => r.jobId));
+      serverJobs.forEach(j => {
+        if (!storedIds.has(j.jobId)) {
+          stored.push({
+            jobId: j.jobId,
+            name: j.videoName || '未知视频',
+            shotCount: j.totalShots || 0,
+            time: j.createdAt || Date.now(),
+          });
+        }
+      });
+
+      // Enrich stored entries with server timestamps
+      stored = stored.map(r => {
+        const srv = serverMap.get(r.jobId);
+        const alive = !!srv;
+        const createdAt = srv ? srv.createdAt : (r.time || 0);
+        const mtime = srv ? srv.savedAt : (r.time || 0);
+        return { ...r, alive, createdAt, mtime: Math.max(mtime, createdAt) };
+      });
+
+      // Remove dead entries (no server record) — not saving yet but filter from display
+      // Actually keep them to show "expired" status
+      allRecents = stored;
+
+      if (stored.length === 0) {
         recentAnalyses.classList.add('hidden');
         return;
       }
 
+      // Sync cleaned list back to localStorage
+      const clean = stored.filter(r => r.alive).map(r => ({
+        jobId: r.jobId, name: r.name, shotCount: r.shotCount, time: r.createdAt
+      }));
+      localStorage.setItem('recentJobs', JSON.stringify(clean));
+
       recentPerPageCount = getSavedPerPage();
       recentPerPage.value = recentPerPageCount;
+      recentSortMode.value = getSavedSortMode();
 
-      const totalPages = Math.ceil(allRecents.length / recentPerPageCount);
+      // Sort
+      const sortMode = getSavedSortMode();
+      const sorted = stored.slice().sort((a, b) => {
+        if (sortMode === 'mtime') return (b.mtime || 0) - (a.mtime || 0);
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+
+      const totalPages = Math.ceil(sorted.length / recentPerPageCount);
       if (recentPage >= totalPages) recentPage = totalPages - 1;
       if (recentPage < 0) recentPage = 0;
 
-      const pageRecents = allRecents.slice(recentPage * recentPerPageCount, (recentPage + 1) * recentPerPageCount);
+      const pageRecents = sorted.slice(recentPage * recentPerPageCount, (recentPage + 1) * recentPerPageCount);
 
       recentAnalyses.classList.remove('hidden');
       recentList.innerHTML = '';
-
-      const checkResults = await Promise.allSettled(
-        pageRecents.map(r => fetch('/api/jobs/' + r.jobId).then(res => ({ jobId: r.jobId, alive: res.ok })))
-      );
-      const aliveMap = new Map();
-      checkResults.forEach(r => {
-        if (r.status === 'fulfilled' && r.value) aliveMap.set(r.value.jobId, r.value.alive);
-      });
 
       pageRecents.forEach(r => {
         const card = document.createElement('div');
         card.className = 'recent-card' + (manageMode ? ' delete-mode' : '');
         card.dataset.jobId = r.jobId;
-        const isAlive = aliveMap.get(r.jobId) !== false;
         const thumbUrl = '/api/jobs/' + r.jobId + '/thumb';
+        const displayTime = getSavedSortMode() === 'added' ? r.createdAt : r.mtime;
         card.innerHTML =
           '<input type="checkbox" class="recent-delete-check"' + (manageMode ? '' : ' style="display:none"') + '>' +
           '<img class="recent-card-thumb" src="' + thumbUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
           '<div class="recent-card-body">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
-          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
-          (isAlive
+          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头 · ' + formatDate(displayTime) + '</div>' +
+          (r.alive
             ? '<div class="recent-card-status">已完成</div>'
             : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>') +
           '</div>';
@@ -179,7 +231,7 @@
             const cb = card.querySelector('.recent-delete-check');
             cb.checked = !cb.checked;
             updateManageSelection();
-          } else if (isAlive) {
+          } else if (r.alive) {
             switchToJob(r.jobId);
           } else {
             alert('该任务已在服务端过期，请重新上传视频分析。');
@@ -292,6 +344,12 @@
   recentPerPage.addEventListener('change', () => {
     recentPerPageCount = parseInt(recentPerPage.value);
     localStorage.setItem('recentPerPage', recentPerPageCount);
+    recentPage = 0;
+    renderRecentAnalyses();
+  });
+
+  recentSortMode.addEventListener('change', () => {
+    localStorage.setItem('recentSortMode', recentSortMode.value);
     recentPage = 0;
     renderRecentAnalyses();
   });
@@ -898,5 +956,11 @@
 
   function formatTimecode(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
   function formatDuration(s) { if (s < 60) return Math.round(s) + '秒'; return Math.floor(s / 60) + '分' + Math.round(s % 60) + '秒'; }
+  function formatDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
   function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
 })();

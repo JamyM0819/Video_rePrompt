@@ -74,11 +74,17 @@
           <h3 class="recent-title">最近分析</h3>
           <div class="recent-actions" id="recentActions">
             <div class="recent-per-page">
+              <label>排序</label>
+              <select id="recentSortMode">
+                <option value="mtime" selected>修改时间</option>
+                <option value="added">添加时间</option>
+              </select>
               <label>每页</label>
               <select id="recentPerPage">
-                <option value="4">4</option>
-                <option value="8" selected>8</option>
-                <option value="16">16</option>
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
               </select>
             </div>
             <button id="recentManageBtn" class="tb-btn">管理</button>

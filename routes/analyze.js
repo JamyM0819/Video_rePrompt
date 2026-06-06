@@ -60,6 +60,7 @@ function mergeJob(jobId, partial) {
   Object.assign(current, partial);
   // Persist to disk when done
   if (current.status === 'done' && current.results) {
+    current.savedAt = Date.now();
     saveJobToDisk(current);
   }
 }
@@ -246,15 +247,41 @@ router.get('/jobs/:jobId', (req, res) => {
 
   // If not in memory, try to load from disk
   if (!job) {
-    try {
-      const resultPath = path.join(config.OUTPUT_DIR, req.params.jobId, 'result.json');
-      if (fs.existsSync(resultPath)) {
+    const resultPath = path.join(config.OUTPUT_DIR, req.params.jobId, 'result.json');
+    if (fs.existsSync(resultPath)) {
+      try {
         const data = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
         data.savedAt = data.savedAt || data.createdAt;
         jobStore.set(data.jobId, data);
         job = data;
-      }
-    } catch {}
+      } catch {}
+    }
+  }
+
+  // If still not found, check for partially-detected job (frames exist, no result.json)
+  if (!job) {
+    const outDir = path.join(config.OUTPUT_DIR, req.params.jobId);
+    const framePath = path.join(outDir, 'frame_0.jpg');
+    if (fs.existsSync(framePath)) {
+      const stat = fs.statSync(outDir);
+      const files = fs.readdirSync(outDir).filter(f => /^frame_\d+\.jpg$/.test(f)).sort();
+      job = {
+        jobId: req.params.jobId,
+        status: 'awaiting_range',
+        sceneData: {
+          totalShots: files.length,
+          thumbBase: '/api/frames/' + req.params.jobId + '/',
+          shots: files.map((f, i) => ({
+            index: i,
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+          })),
+        },
+        createdAt: stat.birthtimeMs || stat.ctimeMs,
+        savedAt: stat.mtimeMs,
+      };
+    }
   }
 
   if (!job) {
@@ -319,7 +346,7 @@ router.post('/re-extract-frames/:jobId', async (req, res) => {
 
 // Get all active jobs summary (for navigation history)
 router.get('/jobs', (req, res) => {
-  // First, ensure all disk jobs are loaded into memory
+  // Load all result.json jobs into memory
   try {
     if (fs.existsSync(config.OUTPUT_DIR)) {
       const dirs = fs.readdirSync(config.OUTPUT_DIR);
@@ -337,7 +364,9 @@ router.get('/jobs', (req, res) => {
   } catch {}
 
   const jobs = [];
+  const seen = new Set();
   for (const [id, job] of jobStore) {
+    seen.add(id);
     jobs.push({
       jobId: id,
       videoName: job.videoName || '未知',
@@ -345,8 +374,43 @@ router.get('/jobs', (req, res) => {
       totalShots: job.sceneData?.totalShots || job.results?.totalShots || 0,
       shotRange: job.results?.shotRange || null,
       createdAt: job.createdAt,
+      savedAt: job.savedAt || job.createdAt,
     });
   }
+
+  // Also include directories with frames but no result.json (scene detected, not yet analyzed)
+  try {
+    if (fs.existsSync(config.OUTPUT_DIR)) {
+      const dirs = fs.readdirSync(config.OUTPUT_DIR);
+      for (const dir of dirs) {
+        if (seen.has(dir)) continue;
+        const framePath = path.join(config.OUTPUT_DIR, dir, 'frame_0.jpg');
+        if (!fs.existsSync(framePath)) continue;
+        const stat = fs.statSync(path.join(config.OUTPUT_DIR, dir));
+        // Try to get video filename from uploads
+        let videoName = '未分析';
+        try {
+          const upDir = path.join(config.UPLOAD_DIR, dir);
+          if (fs.existsSync(upDir)) {
+            const vf = fs.readdirSync(upDir).filter(f => /\.(mp4|mov|avi|mkv|webm)$/i.test(f));
+            if (vf.length) videoName = vf[0];
+          }
+        } catch {}
+        // Count frames
+        const files = fs.readdirSync(path.join(config.OUTPUT_DIR, dir)).filter(f => /^frame_\d+\.jpg$/.test(f));
+        jobs.push({
+          jobId: dir,
+          videoName,
+          status: 'awaiting_range',
+          totalShots: files.length,
+          shotRange: null,
+          createdAt: stat.birthtimeMs || stat.ctimeMs,
+          savedAt: stat.mtimeMs,
+        });
+      }
+    }
+  } catch {}
+
   jobs.sort((a, b) => b.createdAt - a.createdAt);
   res.json(jobs);
 });
