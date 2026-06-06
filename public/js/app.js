@@ -425,11 +425,13 @@
   }
 
   rangeStart.addEventListener('input', () => {
-    if (parseInt(rangeStart.value) > parseInt(rangeEnd.value)) rangeEnd.value = rangeStart.value;
+    const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
+    if (s >= e) rangeEnd.value = Math.min(parseInt(rangeEnd.max), s + 1);
     updateRangeFill();
   });
   rangeEnd.addEventListener('input', () => {
-    if (parseInt(rangeEnd.value) < parseInt(rangeStart.value)) rangeStart.value = rangeEnd.value;
+    const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
+    if (e <= s) rangeStart.value = Math.max(1, e - 1);
     updateRangeFill();
   });
   rangeStartNum.addEventListener('change', setRangeFromNums);

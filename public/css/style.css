@@ -476,6 +476,13 @@ body {
   appearance: none;
   background: transparent;
   pointer-events: none;
+}
+
+#rangeStart {
+  z-index: 3;
+}
+
+#rangeEnd {
   z-index: 2;
 }
 
