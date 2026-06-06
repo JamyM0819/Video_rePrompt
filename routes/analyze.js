@@ -231,7 +231,21 @@ router.post('/analyze-url', async (req, res) => {
 
 // Get job status/results
 router.get('/jobs/:jobId', (req, res) => {
-  const job = jobStore.get(req.params.jobId);
+  let job = jobStore.get(req.params.jobId);
+
+  // If not in memory, try to load from disk
+  if (!job) {
+    try {
+      const resultPath = path.join(config.OUTPUT_DIR, req.params.jobId, 'result.json');
+      if (fs.existsSync(resultPath)) {
+        const data = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+        data.savedAt = data.savedAt || data.createdAt;
+        jobStore.set(data.jobId, data);
+        job = data;
+      }
+    } catch {}
+  }
+
   if (!job) {
     return res.status(404).json({ error: 'Job not found or expired' });
   }
@@ -294,6 +308,23 @@ router.post('/re-extract-frames/:jobId', async (req, res) => {
 
 // Get all active jobs summary (for navigation history)
 router.get('/jobs', (req, res) => {
+  // First, ensure all disk jobs are loaded into memory
+  try {
+    if (fs.existsSync(config.OUTPUT_DIR)) {
+      const dirs = fs.readdirSync(config.OUTPUT_DIR);
+      for (const dir of dirs) {
+        try {
+          const filePath = path.join(config.OUTPUT_DIR, dir, 'result.json');
+          if (!fs.existsSync(filePath)) continue;
+          if (jobStore.has(dir)) continue;
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          data.savedAt = data.savedAt || data.createdAt;
+          jobStore.set(data.jobId, data);
+        } catch {}
+      }
+    }
+  } catch {}
+
   const jobs = [];
   for (const [id, job] of jobStore) {
     jobs.push({
