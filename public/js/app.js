@@ -197,6 +197,55 @@
 
   configSaveBtn.addEventListener('click', () => { saveConfigPreset(); applyConfigToServer(); });
 
+  // "从服务端同步" — pull current server config into form fields
+  document.getElementById('configSyncFromServer').addEventListener('click', async () => {
+    const btn = document.getElementById('configSyncFromServer');
+    btn.disabled = true; btn.textContent = '同步中...';
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const cfg = await res.json();
+      // Fill form fields from server config
+      if (cfg.VISION_PROVIDER) {
+        if (VISION_PRESETS[cfg.VISION_PROVIDER]) {
+          cfgFields.VISION_PROVIDER.value = cfg.VISION_PROVIDER;
+          cfgCustomVision.classList.add('hidden');
+        } else {
+          cfgFields.VISION_PROVIDER.value = '__custom__';
+          cfgCustomVision.value = cfg.VISION_PROVIDER;
+          cfgCustomVision.classList.remove('hidden');
+        }
+        cfgFields.VISION_BASE_URL.value = cfg.VISION_BASE_URL || '';
+        cfgFields.VISION_MODEL.value = cfg.VISION_MODEL || '';
+        cfgFields.VISION_CONCURRENCY.value = cfg.VISION_CONCURRENCY || '3';
+        cfgFields.VISION_MAX_TOKENS.value = cfg.VISION_MAX_TOKENS || '1024';
+        cfgFields.VISION_API_KEY.value = (cfg.VISION_API_KEY && cfg.VISION_API_KEY !== '***') ? cfg.VISION_API_KEY : '';
+      }
+      if (cfg.AUDIO_PROVIDER) {
+        if (AUDIO_PRESETS[cfg.AUDIO_PROVIDER] || cfg.AUDIO_PROVIDER === 'none') {
+          cfgFields.AUDIO_PROVIDER.value = cfg.AUDIO_PROVIDER;
+          cfgCustomAudio.classList.add('hidden');
+        } else {
+          cfgFields.AUDIO_PROVIDER.value = '__custom__';
+          cfgCustomAudio.value = cfg.AUDIO_PROVIDER;
+          cfgCustomAudio.classList.remove('hidden');
+        }
+        cfgFields.AUDIO_BASE_URL.value = cfg.AUDIO_BASE_URL || '';
+        cfgFields.AUDIO_MODEL.value = cfg.AUDIO_MODEL || '';
+        cfgFields.AUDIO_CONCURRENCY.value = cfg.AUDIO_CONCURRENCY || '1';
+        cfgFields.AUDIO_API_KEY.value = (cfg.AUDIO_API_KEY && cfg.AUDIO_API_KEY !== '***') ? cfg.AUDIO_API_KEY : '';
+      }
+      configStatus.textContent = '✓ 已从服务端同步配置';
+      configStatus.className = 'config-status';
+      // Also auto-save a preset chip so next time it's visible
+      saveConfigPreset();
+    } catch (e) {
+      configStatus.textContent = '✕ ' + e.message;
+      configStatus.className = 'config-status error';
+    }
+    btn.disabled = false; btn.textContent = '从服务端同步';
+  });
+
   // Provider presets — auto-fill Base URL & Model when switching provider
   const VISION_PRESETS = {
     dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
@@ -218,6 +267,16 @@
   function getConfigPresets() {
     try { return JSON.parse(localStorage.getItem('appConfigPresets') || '[]'); } catch { return []; }
   }
+  async function saveConfigPresetsToServer(presets) {
+    try {
+      // Strip _l and _t fields before sending (they're UI-only)
+      const clean = presets.map(p => { const c = { ...p }; delete c._l; delete c._t; return c; });
+      await fetch('/api/config-presets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clean),
+      });
+    } catch {}
+  }
   function saveConfigPreset() {
     const payload = buildConfigPayload();
     const label = (payload.VISION_PROVIDER||'?').slice(0,12) + '/' + (payload.VISION_MODEL||'').slice(0,15) + ' | ' + (payload.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (payload.AUDIO_MODEL||'').slice(0,12);
@@ -225,14 +284,16 @@
     presets.unshift({ ...payload, _l: label, _t: Date.now() });
     if (presets.length > 8) presets = presets.slice(0, 8);
     localStorage.setItem('appConfigPresets', JSON.stringify(presets));
+    saveConfigPresetsToServer(presets);
     renderConfigPresets();
   }
-  function deleteConfigPreset(i) {
+  async function deleteConfigPreset(i) {
     let presets = getConfigPresets(); presets.splice(i, 1);
     localStorage.setItem('appConfigPresets', JSON.stringify(presets));
+    await saveConfigPresetsToServer(presets);
     renderConfigPresets();
   }
-  function applyConfigPreset(i) {
+  async function applyConfigPreset(i) {
     var preset = getConfigPresets()[i]; if (!preset) return;
     // Apply each field directly
     if (preset.VISION_PROVIDER) {
@@ -352,8 +413,52 @@
     );
   });
 
+  // Load config from localStorage first (fast), then upgrade from server
   loadConfigFromLocal();
-  renderConfigPresets();
+
+  // Pull presets from server (cross-browser), merge into localStorage
+  (async () => {
+    try {
+      const res = await fetch('/api/config-presets');
+      if (!res.ok) return;
+      const serverPresets = await res.json();
+      if (serverPresets.length > 0) {
+        // Add _l and _t UI fields
+        const enriched = serverPresets.map((p, i) => ({
+          ...p,
+          _l: (p.VISION_PROVIDER||'?').slice(0,12) + '/' + (p.VISION_MODEL||'').slice(0,15) + ' | ' + (p.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (p.AUDIO_MODEL||'').slice(0,12),
+          _t: Date.now() - i * 1000,
+        }));
+        localStorage.setItem('appConfigPresets', JSON.stringify(enriched));
+        renderConfigPresets();
+      } else {
+        // No presets yet — if server has an active config, auto-create a chip from it
+        try {
+          const cfg = await fetch('/api/config').then(r => r.json());
+          if (cfg.VISION_PROVIDER) {
+            const payload = {
+              VISION_PROVIDER: cfg.VISION_PROVIDER,
+              VISION_BASE_URL: cfg.VISION_BASE_URL || '',
+              VISION_API_KEY: '', // server hides this
+              VISION_MODEL: cfg.VISION_MODEL || '',
+              VISION_CONCURRENCY: cfg.VISION_CONCURRENCY || '3',
+              VISION_MAX_TOKENS: cfg.VISION_MAX_TOKENS || '1024',
+              AUDIO_PROVIDER: cfg.AUDIO_PROVIDER,
+              AUDIO_BASE_URL: cfg.AUDIO_BASE_URL || '',
+              AUDIO_API_KEY: '',
+              AUDIO_MODEL: cfg.AUDIO_MODEL || '',
+              AUDIO_CONCURRENCY: cfg.AUDIO_CONCURRENCY || '1',
+              _l: (cfg.VISION_PROVIDER||'?').slice(0,12) + '/' + (cfg.VISION_MODEL||'').slice(0,15) + ' | ' + (cfg.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (cfg.AUDIO_MODEL||'').slice(0,12),
+              _t: Date.now(),
+            };
+            localStorage.setItem('appConfigPresets', JSON.stringify([payload]));
+            saveConfigPresetsToServer([payload]);
+            renderConfigPresets();
+          }
+        } catch {}
+      }
+    } catch {}
+  })();
 
   // On startup, sync non-sensitive fields to server (API keys already on disk)
   (async () => {

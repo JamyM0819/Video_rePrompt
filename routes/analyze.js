@@ -111,11 +111,11 @@ router.get('/config', (req, res) => {
   res.json({
     VISION_PROVIDER: overrides.get('VISION_PROVIDER') || config.VISION_PROVIDER,
     VISION_BASE_URL: overrides.get('VISION_BASE_URL') || config.VISION_BASE_URL,
-    VISION_API_KEY: overrides.get('VISION_API_KEY') || config.VISION_API_KEY,
+    VISION_API_KEY: overrides.get('VISION_API_KEY') ? '***' : (config.VISION_API_KEY ? '***' : ''),
     VISION_MODEL: overrides.get('VISION_MODEL') || config.VISION_MODEL,
     AUDIO_PROVIDER: overrides.get('AUDIO_PROVIDER') || config.AUDIO_PROVIDER,
     AUDIO_BASE_URL: overrides.get('AUDIO_BASE_URL') || config.AUDIO_BASE_URL,
-    AUDIO_API_KEY: overrides.get('AUDIO_API_KEY') || config.AUDIO_API_KEY,
+    AUDIO_API_KEY: overrides.get('AUDIO_API_KEY') ? '***' : (config.AUDIO_API_KEY ? '***' : ''),
     AUDIO_MODEL: overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL,
     VISION_CONCURRENCY: overrides.get('VISION_CONCURRENCY') || 5,
     VISION_MAX_TOKENS: overrides.get('VISION_MAX_TOKENS') || 1024,
@@ -138,6 +138,30 @@ router.post('/config', (req, res) => {
     AUDIO_BASE_URL: overrides.get('AUDIO_BASE_URL') || config.AUDIO_BASE_URL,
     AUDIO_MODEL: overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL,
   }});
+});
+
+// ── Config presets (service-side storage, cross-browser) ──
+const PRESETS_FILE = path.join(config.OUTPUT_DIR, '.config-presets.json');
+
+router.get('/config-presets', (req, res) => {
+  try {
+    if (fs.existsSync(PRESETS_FILE)) {
+      res.json(JSON.parse(fs.readFileSync(PRESETS_FILE, 'utf-8')));
+    } else {
+      res.json([]);
+    }
+  } catch { res.json([]); }
+});
+
+router.post('/config-presets', (req, res) => {
+  try {
+    const dir = path.dirname(PRESETS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(PRESETS_FILE, JSON.stringify(req.body, null, 2) + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Test connection endpoints ──
