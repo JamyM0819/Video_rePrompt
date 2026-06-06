@@ -778,9 +778,32 @@ body {
   font-size: 0.75rem;
   padding: 2px 8px;
   border-radius: 10px;
+  margin-top: 6px;
+}
+
+.status-done {
   background: rgba(52,211,153,0.15);
   color: var(--success);
-  margin-top: 6px;
+}
+
+.status-pending {
+  background: rgba(250,176,5,0.15);
+  color: #fab005;
+}
+
+.status-running {
+  background: rgba(74,108,247,0.15);
+  color: var(--accent);
+}
+
+.status-error {
+  background: rgba(247,74,92,0.15);
+  color: var(--error);
+}
+
+.status-expired {
+  background: rgba(139,143,167,0.1);
+  color: var(--text-secondary);
 }
 
 .recent-delete-check {

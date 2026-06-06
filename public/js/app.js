@@ -147,6 +147,8 @@
           jobId: j.jobId,
           name: j.videoName || '未知视频',
           shotCount: j.totalShots || 0,
+          status: j.status,
+          shotRange: j.shotRange || null,
           createdAt: j.createdAt || 0,
           savedAt: j.savedAt || j.createdAt || 0,
         });
@@ -165,13 +167,15 @@
         }
       });
 
-      // Enrich stored entries with server timestamps
+      // Enrich stored entries with server timestamps and real-time status
       stored = stored.map(r => {
         const srv = serverMap.get(r.jobId);
         const alive = !!srv;
         const createdAt = srv ? srv.createdAt : (r.time || 0);
         const mtime = srv ? srv.savedAt : (r.time || 0);
-        return { ...r, alive, createdAt, mtime: Math.max(mtime, createdAt) };
+        const status = srv ? srv.status : 'expired';
+        const shotRange = srv ? srv.shotRange : null;
+        return { ...r, alive, status, shotRange, createdAt, mtime: Math.max(mtime, createdAt) };
       });
 
       // Remove dead entries (no server record) — not saving yet but filter from display
@@ -220,10 +224,8 @@
           '<img class="recent-card-thumb" src="' + thumbUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
           '<div class="recent-card-body">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
-          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头 · ' + formatDate(displayTime) + '</div>' +
-          (r.alive
-            ? '<div class="recent-card-status">已完成</div>'
-            : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>') +
+          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头' + (r.shotRange ? '（' + r.shotRange + '）' : '') + ' · ' + formatDate(displayTime) + '</div>' +
+          getStatusBadge(r.status) +
           '</div>';
         card.addEventListener('click', (e) => {
           if (e.target.tagName === 'INPUT') return;
@@ -962,5 +964,23 @@
     const pad = n => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
+  function getStatusBadge(status) {
+    const map = {
+      done:              { label: '分析完成', cls: 'status-done' },
+      awaiting_range:    { label: '等待分析', cls: 'status-pending' },
+      extracting:        { label: '抽取中',   cls: 'status-running' },
+      extracting_frames: { label: '抽取中',   cls: 'status-running' },
+      extracting_thumbs: { label: '抽取缩略图', cls: 'status-running' },
+      analyzing:         { label: '分析中',   cls: 'status-running' },
+      detecting_scenes:  { label: '检测镜头中', cls: 'status-running' },
+      downloading:       { label: '下载中',   cls: 'status-running' },
+      received:          { label: '排队中',   cls: 'status-running' },
+      error:             { label: '处理失败', cls: 'status-error' },
+      expired:           { label: '已过期',   cls: 'status-expired' },
+    };
+    const m = map[status] || { label: status, cls: 'status-running' };
+    return '<div class="recent-card-status ' + m.cls + '">' + m.label + '</div>';
+  }
+
   function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
 })();
