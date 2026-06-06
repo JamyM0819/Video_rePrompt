@@ -567,8 +567,11 @@
   }
 
   async function switchToJob(jobId) {
-    // Save current state, then load the other job
+    // Hide all content sections first
     uploadSection.classList.add('hidden');
+    rangeSection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    errorSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
     setProgress(0, '加载中...', '');
     clearToolbar();
@@ -587,15 +590,18 @@
       currentJobId = job.jobId;
 
       if (job.status === 'awaiting_range' && job.sceneData) {
+        saveSession(jobId, 'awaiting_range');
         progressSection.classList.add('hidden');
         showRangeSelector(job.sceneData);
       } else if (job.status === 'done' && job.results) {
+        saveSession(jobId, 'done');
         progressSection.classList.add('hidden');
         showResults(job);
       } else if (job.status === 'error') {
         showError(job.error || '处理失败');
       } else {
         // In progress
+        saveSession(jobId, job.status);
         setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
         startDetectAnim();
         pollJob(jobId);
