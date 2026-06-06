@@ -117,14 +117,17 @@ router.get('/config', (req, res) => {
     AUDIO_BASE_URL: overrides.get('AUDIO_BASE_URL') || config.AUDIO_BASE_URL,
     AUDIO_API_KEY: overrides.get('AUDIO_API_KEY') || config.AUDIO_API_KEY,
     AUDIO_MODEL: overrides.get('AUDIO_MODEL') || config.AUDIO_MODEL,
+    VISION_CONCURRENCY: overrides.get('VISION_CONCURRENCY') || 5,
+    VISION_MAX_TOKENS: overrides.get('VISION_MAX_TOKENS') || 1024,
+    AUDIO_CONCURRENCY: overrides.get('AUDIO_CONCURRENCY') || 3,
   });
 });
 
 router.post('/config', (req, res) => {
   const { VISION_PROVIDER, VISION_BASE_URL, VISION_API_KEY, VISION_MODEL,
-    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL } = req.body;
+    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY } = req.body;
   const fields = { VISION_PROVIDER, VISION_BASE_URL, VISION_API_KEY, VISION_MODEL,
-    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL };
+    AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY };
   overrides.apply(fields);
   console.log('[config] Updated:', Object.keys(fields).filter(k => overrides.get(k)).join(', '));
   res.json({ ok: true, overrides: overrides.getAll(), active: {

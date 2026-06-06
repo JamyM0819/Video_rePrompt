@@ -46,7 +46,7 @@ function callVisionAPI(framePath, prompt) {
         ],
       }],
       stream: false,
-      max_tokens: 1024,
+      max_tokens: parseInt(cfg('VISION_MAX_TOKENS')) || 1024,
     });
 
     const apiUrl = new URL(cfg('VISION_BASE_URL').replace(/\/?$/, '/') + 'chat/completions');
@@ -103,22 +103,36 @@ function encodeImage(filePath) {
 }
 
 /**
- * Describe all frames sequentially with retry.
+ * Describe all frames in parallel with configurable concurrency.
  * Never throws — individual failures become error strings.
  */
 async function describeAllFrames(framePaths, onProgress, customPrompt) {
-  const results = [];
-  const timings = [];
-  for (let i = 0; i < framePaths.length; i++) {
-    if (i === 0) console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
-    console.log(`[vision] Frame ${i + 1}/${framePaths.length}: sending to API...`);
+  const concurrency = parseInt(cfg('VISION_CONCURRENCY')) || 5;
+  const results = new Array(framePaths.length);
+  const timings = new Array(framePaths.length);
+  let done = 0;
+
+  console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
+  console.log(`[vision] Starting ${framePaths.length} frames (concurrency=${concurrency})...`);
+
+  const worker = async (index) => {
     const t0 = Date.now();
-    results.push(await describeFrame(framePaths[i], customPrompt));
-    const ms = Date.now() - t0;
-    timings.push(ms);
-    console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars, ${ms}ms)`);
-    if (onProgress) onProgress(i);
+    results[index] = await describeFrame(framePaths[index], customPrompt);
+    timings[index] = Date.now() - t0;
+    done++;
+    console.log(`[vision] Frame ${index + 1}/${framePaths.length}: done (${results[index].length} chars, ${timings[index]}ms)`);
+    if (onProgress) onProgress(done - 1);
+  };
+
+  // Process in batches to limit concurrency
+  for (let i = 0; i < framePaths.length; i += concurrency) {
+    const batch = [];
+    for (let j = i; j < Math.min(i + concurrency, framePaths.length); j++) {
+      batch.push(worker(j));
+    }
+    await Promise.all(batch);
   }
+
   return { results, timings };
 }
 

@@ -94,6 +94,9 @@
     AUDIO_BASE_URL: document.getElementById('cfgAudioBaseUrl'),
     AUDIO_API_KEY: document.getElementById('cfgAudioApiKey'),
     AUDIO_MODEL: document.getElementById('cfgAudioModel'),
+    VISION_CONCURRENCY: document.getElementById('cfgVisionConcurrency'),
+    VISION_MAX_TOKENS: document.getElementById('cfgVisionMaxTokens'),
+    AUDIO_CONCURRENCY: document.getElementById('cfgAudioConcurrency'),
   };
 
   // Resolve effective provider value (custom input or select)

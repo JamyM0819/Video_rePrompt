@@ -99,8 +99,8 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
     updateJob(jobId, { logLine: `🤖 开始分析 ${totalItems} 项（${framePaths.length} 画面 + ${hasAudio ? audioPaths.length : 0} 台词）...` });
 
     const [visionOut, audioOut] = await Promise.all([
-      describeAllFrames(framePaths, (i) => { visualDone = i + 1; updateProgress(); }, customPrompt),
-      hasAudio ? describeAllAudio(audioPaths, (i) => { audioDone = i + 1; updateProgress(); }, customPrompt) : Promise.resolve(null),
+      describeAllFrames(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt),
+      hasAudio ? describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt) : Promise.resolve(null),
     ]);
 
     const visualResults = visionOut?.results || visionOut;

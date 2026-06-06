@@ -1017,6 +1017,13 @@ body {
   display: none;
 }
 
+.config-token-input {
+  width: 70px !important;
+  display: inline-block !important;
+  margin-top: 3px;
+  text-align: center;
+}
+
 .config-test-row {
   display: flex;
   align-items: center;

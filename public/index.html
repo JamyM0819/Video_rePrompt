@@ -129,6 +129,8 @@
                 <label>Base URL<input id="cfgVisionBaseUrl" placeholder="https://api.openai.com/v1"></label>
                 <label>API Key<input id="cfgVisionApiKey" type="password" placeholder="sk-xxx"></label>
                 <label>Model<input id="cfgVisionModel" placeholder="gpt-4o"></label>
+                <label>并发数<input id="cfgVisionConcurrency" class="config-token-input" value="5" placeholder="5"></label>
+                <label>最大 Token<input id="cfgVisionMaxTokens" class="config-token-input" value="1024" placeholder="1024"></label>
                 <div class="config-test-row">
                   <button id="cfgVisionTest" class="config-test-btn">测试连接</button>
                   <span id="cfgVisionTestResult" class="config-test-result hidden"></span>
@@ -148,6 +150,7 @@
                 <label>Base URL<input id="cfgAudioBaseUrl" placeholder="https://api.openai.com/v1"></label>
                 <label>API Key<input id="cfgAudioApiKey" type="password" placeholder="sk-xxx"></label>
                 <label>Model<input id="cfgAudioModel" placeholder="whisper-1"></label>
+                <label>并发数<input id="cfgAudioConcurrency" class="config-token-input" value="3" placeholder="3"></label>
                 <div class="config-test-row">
                   <button id="cfgAudioTest" class="config-test-btn">测试连接</button>
                   <span id="cfgAudioTestResult" class="config-test-result hidden"></span>
