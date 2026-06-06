@@ -294,14 +294,14 @@
   // "添加" 按钮 — 把当前 textarea 内容保存为历史气泡
   customPromptSubmit.addEventListener('click', () => {
     const val = customPromptInput.value.trim();
-    if (val) savePromptHistory(val);
+    if (val) { savePromptHistory(val); customPromptInput.value = ''; }
   });
   // Ctrl+Enter / Cmd+Enter 也可以添加
   customPromptInput.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       const val = customPromptInput.value.trim();
-      if (val) savePromptHistory(val);
+      if (val) { savePromptHistory(val); customPromptInput.value = ''; }
     }
   });
 
@@ -447,12 +447,8 @@
     setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: document.getElementById('customPromptInput').value.trim() }),
-    }).then(r => {
-      const cp = document.getElementById('customPromptInput').value.trim();
-      if (cp) savePromptHistory(cp);
-      return r.json();
-    }).then(data => {
+      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n') }),
+    }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
       setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
