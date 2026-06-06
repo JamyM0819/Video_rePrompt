@@ -195,7 +195,97 @@
     configBody.classList.toggle('hidden');
   });
 
-  configSaveBtn.addEventListener('click', applyConfigToServer);
+  configSaveBtn.addEventListener('click', () => { saveConfigPreset(); applyConfigToServer(); });
+
+  // Provider presets — auto-fill Base URL & Model when switching provider
+  const VISION_PRESETS = {
+    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
+    openai:     { baseUrl: 'https://api.openai.com/v1',                     model: 'gpt-4o' },
+    anthropic:  { baseUrl: 'https://api.anthropic.com/v1',                  model: 'claude-sonnet-4-20250514' },
+    google:     { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash' },
+    custom:     { baseUrl: '', model: '' },
+  };
+  const AUDIO_PRESETS = {
+    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com', model: 'qwen3-asr-flash' },
+    openai:     { baseUrl: 'https://api.openai.com/v1',       model: 'whisper-1' },
+    custom:     { baseUrl: '', model: '' },
+    none:       { baseUrl: '', model: '' },
+  };
+
+  // ── Config presets: save/restore full config as chips ──
+  const configPresets = document.getElementById('configPresets');
+
+  function getConfigPresets() {
+    try { return JSON.parse(localStorage.getItem('appConfigPresets') || '[]'); } catch { return []; }
+  }
+  function saveConfigPreset() {
+    const payload = buildConfigPayload();
+    const label = (payload.VISION_PROVIDER||'?').slice(0,12) + '/' + (payload.VISION_MODEL||'').slice(0,15) + ' | ' + (payload.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (payload.AUDIO_MODEL||'').slice(0,12);
+    let presets = getConfigPresets().filter(p => (p.VISION_PROVIDER+'|||'+p.AUDIO_PROVIDER) !== (payload.VISION_PROVIDER+'|||'+payload.AUDIO_PROVIDER));
+    presets.unshift({ ...payload, _l: label, _t: Date.now() });
+    if (presets.length > 8) presets = presets.slice(0, 8);
+    localStorage.setItem('appConfigPresets', JSON.stringify(presets));
+    renderConfigPresets();
+  }
+  function deleteConfigPreset(i) {
+    let presets = getConfigPresets(); presets.splice(i, 1);
+    localStorage.setItem('appConfigPresets', JSON.stringify(presets));
+    renderConfigPresets();
+  }
+  function applyConfigPreset(i) {
+    var preset = getConfigPresets()[i]; if (!preset) return;
+    // Apply each field directly
+    if (preset.VISION_PROVIDER) {
+      if (VISION_PRESETS[preset.VISION_PROVIDER]) {
+        cfgFields.VISION_PROVIDER.value = preset.VISION_PROVIDER;
+        cfgCustomVision.classList.add('hidden');
+      } else {
+        cfgFields.VISION_PROVIDER.value = '__custom__';
+        cfgCustomVision.value = preset.VISION_PROVIDER;
+        cfgCustomVision.classList.remove('hidden');
+      }
+    }
+    if (preset.VISION_BASE_URL != null) cfgFields.VISION_BASE_URL.value = preset.VISION_BASE_URL;
+    if (preset.VISION_API_KEY != null) cfgFields.VISION_API_KEY.value = preset.VISION_API_KEY;
+    if (preset.VISION_MODEL != null) cfgFields.VISION_MODEL.value = preset.VISION_MODEL;
+    if (preset.VISION_CONCURRENCY != null) cfgFields.VISION_CONCURRENCY.value = preset.VISION_CONCURRENCY;
+    if (preset.VISION_MAX_TOKENS != null) cfgFields.VISION_MAX_TOKENS.value = preset.VISION_MAX_TOKENS;
+    if (preset.AUDIO_PROVIDER) {
+      if (AUDIO_PRESETS[preset.AUDIO_PROVIDER]) {
+        cfgFields.AUDIO_PROVIDER.value = preset.AUDIO_PROVIDER;
+        cfgCustomAudio.classList.add('hidden');
+      } else if (preset.AUDIO_PROVIDER === 'none') {
+        cfgFields.AUDIO_PROVIDER.value = 'none';
+        cfgCustomAudio.classList.add('hidden');
+      } else {
+        cfgFields.AUDIO_PROVIDER.value = '__custom__';
+        cfgCustomAudio.value = preset.AUDIO_PROVIDER;
+        cfgCustomAudio.classList.remove('hidden');
+      }
+    }
+    if (preset.AUDIO_BASE_URL != null) cfgFields.AUDIO_BASE_URL.value = preset.AUDIO_BASE_URL;
+    if (preset.AUDIO_API_KEY != null) cfgFields.AUDIO_API_KEY.value = preset.AUDIO_API_KEY;
+    if (preset.AUDIO_MODEL != null) cfgFields.AUDIO_MODEL.value = preset.AUDIO_MODEL;
+    if (preset.AUDIO_CONCURRENCY != null) cfgFields.AUDIO_CONCURRENCY.value = preset.AUDIO_CONCURRENCY;
+    configStatus.textContent = '✓ 已加载配置'; configStatus.className = 'config-status';
+  }
+  function renderConfigPresets() {
+    const presets = getConfigPresets();
+    configPresets.classList.toggle('hidden', presets.length === 0);
+    configPresets.innerHTML = '';
+    presets.forEach((p, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'preset-chip';
+      chip.title = p.VISION_PROVIDER + '/' + p.VISION_MODEL + '\n' + p.AUDIO_PROVIDER + '/' + p.AUDIO_MODEL;
+      const lb = document.createElement('span'); lb.className = 'preset-chip-label'; lb.textContent = '配置' + (i + 1);
+      const nm = document.createElement('span'); nm.className = 'preset-chip-name'; nm.textContent = p._l;
+      const dl = document.createElement('span'); dl.className = 'preset-chip-del'; dl.textContent = '✕';
+      dl.addEventListener('click', e => { e.stopPropagation(); deleteConfigPreset(i); });
+      chip.addEventListener('click', () => applyConfigPreset(i));
+      chip.appendChild(lb); chip.appendChild(nm); chip.appendChild(dl);
+      configPresets.appendChild(chip);
+    });
+  }
 
   // ── Test connection buttons ──
 
@@ -262,24 +352,8 @@
     );
   });
 
-  // Provider presets — auto-fill Base URL & Model when switching provider
-  const VISION_PRESETS = {
-    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
-    openai:     { baseUrl: 'https://api.openai.com/v1',                     model: 'gpt-4o' },
-    anthropic:  { baseUrl: 'https://api.anthropic.com/v1',                  model: 'claude-sonnet-4-20250514' },
-    google:     { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash' },
-    custom:     { baseUrl: '', model: '' },
-  };
-  const AUDIO_PRESETS = {
-    dashscope:  { baseUrl: 'https://dashscope.aliyuncs.com', model: 'qwen3-asr-flash' },
-    openai:     { baseUrl: 'https://api.openai.com/v1',       model: 'whisper-1' },
-    custom:     { baseUrl: '', model: '' },
-    none:       { baseUrl: '', model: '' },
-  };
-
-  // Load non-sensitive config from localStorage (provider, baseUrl, model)
-  // API keys are NEVER read from localStorage — user must re-enter them
   loadConfigFromLocal();
+  renderConfigPresets();
 
   // On startup, sync non-sensitive fields to server (API keys already on disk)
   (async () => {

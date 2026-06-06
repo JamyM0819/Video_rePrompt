@@ -7,8 +7,14 @@ const config = require('./utils/config');
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static frontend files — disable cache for development
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  },
+}));
 
 // Increase request timeout for large uploads
 app.use((req, res, next) => {
