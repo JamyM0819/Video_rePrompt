@@ -149,7 +149,7 @@ router.post('/commit-range', async (req, res) => {
   if (!job) {
     return res.status(404).json({ error: '任务已过期或不存在' });
   }
-  if (job.status !== 'awaiting_range') {
+  if (job.status !== 'awaiting_range' && job.status !== 'done') {
     return res.status(400).json({ error: '任务状态不正确，请重新上传' });
   }
 
