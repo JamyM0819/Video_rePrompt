@@ -88,9 +88,15 @@
 
       <!-- Settings -->
       <div class="settings-row">
-        <span class="settings-label">附加提示词：</span>
-        <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="可选，追加到分析和转写指令中">
-        <button id="clearCacheBtn" class="btn-clear">清除缓存</button>
+        <div class="settings-row-top">
+          <span class="settings-label">附加提示词：</span>
+          <button id="clearCacheBtn" class="btn-clear-top">清除所有缓存</button>
+        </div>
+        <div class="custom-prompt-row">
+          <textarea id="customPromptInput" class="custom-prompt-input" placeholder="可选，追加到分析和转写指令中，例如：忽略水印、不要描述文字…" rows="3"></textarea>
+          <button id="customPromptSubmit" class="custom-prompt-submit">添加</button>
+        </div>
+        <div id="promptHistory" class="prompt-history hidden"></div>
       </div>
     </section>
 

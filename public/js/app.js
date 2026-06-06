@@ -24,6 +24,9 @@
   const urlInput = document.getElementById('urlInput');
   const urlSubmitBtn = document.getElementById('urlSubmitBtn');
   const clearCacheBtn = document.getElementById('clearCacheBtn');
+  const customPromptInput = document.getElementById('customPromptInput');
+  const customPromptSubmit = document.getElementById('customPromptSubmit');
+  const promptHistory = document.getElementById('promptHistory');
 
   const progressSection = document.getElementById('progressSection');
   const progressBar = document.getElementById('progressBar');
@@ -115,6 +118,7 @@
     // Home page — show history
     setToolbar([{type:'history'}]);
     renderRecentAnalyses();
+    renderPromptHistory();
   }
 
   let manageMode = false;
@@ -235,6 +239,71 @@
 
     exitManageMode();
   }
+
+  // ── Prompt history ──
+  function getPromptHistory() {
+    try { return JSON.parse(localStorage.getItem('promptHistory') || '[]'); } catch { return []; }
+  }
+
+  function savePromptHistory(text) {
+    if (!text || !text.trim()) return;
+    const trimmed = text.trim();
+    let h = getPromptHistory().filter(p => p !== trimmed);
+    h.unshift(trimmed);
+    if (h.length > 10) h = h.slice(0, 10);
+    localStorage.setItem('promptHistory', JSON.stringify(h));
+    renderPromptHistory();
+  }
+
+  function deletePromptHistory(text) {
+    let h = getPromptHistory().filter(p => p !== text);
+    localStorage.setItem('promptHistory', JSON.stringify(h));
+    renderPromptHistory();
+  }
+
+  function renderPromptHistory() {
+    const h = getPromptHistory();
+    if (h.length === 0) {
+      promptHistory.classList.add('hidden');
+      return;
+    }
+    promptHistory.classList.remove('hidden');
+    promptHistory.innerHTML = '';
+    h.forEach(text => {
+      const chip = document.createElement('span');
+      chip.className = 'prompt-chip';
+      const span = document.createElement('span');
+      span.className = 'prompt-chip-text';
+      span.textContent = text;
+      span.title = text;
+      const del = document.createElement('span');
+      del.className = 'prompt-chip-del';
+      del.textContent = '✕';
+      del.title = '删除此条';
+      del.addEventListener('click', (e) => { e.stopPropagation(); deletePromptHistory(text); });
+      chip.appendChild(span);
+      chip.appendChild(del);
+      chip.addEventListener('click', () => {
+        customPromptInput.value = text;
+        customPromptInput.focus();
+      });
+      promptHistory.appendChild(chip);
+    });
+  }
+
+  // "添加" 按钮 — 把当前 textarea 内容保存为历史气泡
+  customPromptSubmit.addEventListener('click', () => {
+    const val = customPromptInput.value.trim();
+    if (val) savePromptHistory(val);
+  });
+  // Ctrl+Enter / Cmd+Enter 也可以添加
+  customPromptInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      const val = customPromptInput.value.trim();
+      if (val) savePromptHistory(val);
+    }
+  });
 
   // Wire up management buttons
   recentManageBtn.addEventListener('click', enterManageMode);
@@ -379,7 +448,11 @@
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: document.getElementById('customPromptInput').value.trim() }),
-    }).then(r => r.json()).then(data => {
+    }).then(r => {
+      const cp = document.getElementById('customPromptInput').value.trim();
+      if (cp) savePromptHistory(cp);
+      return r.json();
+    }).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
       setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
@@ -864,13 +937,7 @@
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     stopDetectAnim();
     clearSession();
-    clearToolbar();
-    cameFromResults = false;
-    progressSection.classList.add('hidden'); rangeSection.classList.add('hidden'); resultsSection.classList.add('hidden'); errorSection.classList.add('hidden');
-    uploadSection.classList.remove('hidden');
-    fileInput.value = ''; urlInput.value = '';
-    urlSubmitBtn.disabled = false; urlSubmitBtn.classList.remove('btn-loading');
-    setToolbar([{type:'history'}]);
+    location.reload();
   }
 
   // ── Utilities ──
