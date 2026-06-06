@@ -230,6 +230,17 @@ router.post('/analyze-url', async (req, res) => {
 });
 
 // Get job status/results
+// Serve a thumbnail for recent cards (must be before /jobs/:jobId to match first)
+router.get('/jobs/:jobId/thumb', (req, res) => {
+  const dir = path.join(config.OUTPUT_DIR, req.params.jobId);
+  try {
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Not found' });
+    const files = fs.readdirSync(dir).filter(f => /^frame_\d+\.jpg$/.test(f)).sort();
+    if (files.length === 0) return res.status(404).json({ error: 'No frames' });
+    res.sendFile(path.resolve(path.join(dir, files[0])));
+  } catch { res.status(404).json({ error: 'Not found' }); }
+});
+
 router.get('/jobs/:jobId', (req, res) => {
   let job = jobStore.get(req.params.jobId);
 

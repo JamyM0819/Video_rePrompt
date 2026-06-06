@@ -73,17 +73,25 @@
         <div class="recent-header">
           <h3 class="recent-title">最近分析</h3>
           <div class="recent-actions" id="recentActions">
+            <div class="recent-per-page">
+              <label>每页</label>
+              <select id="recentPerPage">
+                <option value="4">4</option>
+                <option value="8" selected>8</option>
+                <option value="16">16</option>
+              </select>
+            </div>
             <button id="recentManageBtn" class="tb-btn">管理</button>
             <div id="recentManageBar" class="recent-manage-bar hidden">
               <label class="recent-select-all-label"><input type="checkbox" id="recentSelectAll"> 全选</label>
               <span id="recentSelectedHint" class="recent-selected-hint"></span>
-              <input type="number" id="recentMaxCount" class="recent-max-input" min="1" max="20" value="6" title="保留卡片数量">
               <button id="recentDeleteBtn" class="tb-btn" style="border-color:var(--error);color:var(--error)">删除选中缓存</button>
               <button id="recentManageDoneBtn" class="tb-btn primary">完成</button>
             </div>
           </div>
         </div>
         <div id="recentList" class="recent-list"></div>
+        <div id="recentPagination" class="recent-pagination hidden"></div>
       </div>
 
       <!-- Settings -->

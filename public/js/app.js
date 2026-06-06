@@ -13,9 +13,10 @@
   const recentManageBar = document.getElementById('recentManageBar');
   const recentSelectAll = document.getElementById('recentSelectAll');
   const recentSelectedHint = document.getElementById('recentSelectedHint');
-  const recentMaxCount = document.getElementById('recentMaxCount');
   const recentDeleteBtn = document.getElementById('recentDeleteBtn');
   const recentManageDoneBtn = document.getElementById('recentManageDoneBtn');
+  const recentPerPage = document.getElementById('recentPerPage');
+  const recentPagination = document.getElementById('recentPagination');
 
   const tabFile = document.getElementById('tabFile');
   const tabUrl = document.getElementById('tabUrl');
@@ -69,14 +70,18 @@
   let progressAnimTimer = null;
   let currentJobId = null;
   let currentJobStatus = null;
-  let cameFromResults = false;   // track navigation for back button in toolbar
+  let cameFromResults = false;
+  let manageMode = false;
+  let recentPage = 0;
+  let recentPerPageCount = 8;
+  let allRecents = [];
 
   // ── Version display ──
   fetch('/api/version').then(r => r.json()).then(v => {
-    document.getElementById('versionLine').textContent = `v${v.version} · ${v.hash}`;
+    document.getElementById('versionLine').textContent = 'v' + v.version + ' ' + v.hash;
   }).catch(() => {});
 
-  // ── Session restore: resume on page refresh ──
+  // ── Session restore ──
   const savedJobId = sessionStorage.getItem('jobId');
   const savedStatus = sessionStorage.getItem('jobStatus');
   if (savedJobId && savedStatus) {
@@ -84,7 +89,6 @@
     currentJobStatus = savedStatus;
     uploadSection.classList.add('hidden');
     if (savedStatus === 'awaiting_range') {
-      // Jump to range selector
       progressSection.classList.add('hidden');
       rangeSection.classList.remove('hidden');
       fetch('/api/jobs/' + savedJobId).then(r => {
@@ -96,11 +100,10 @@
         else resetToUpload();
       }).catch(() => resetToUpload());
     } else if (savedStatus === 'done') {
-      // Jump to results
       progressSection.classList.add('hidden');
       rangeSection.classList.add('hidden');
       fetch('/api/jobs/' + savedJobId).then(r => {
-        if (!r.ok) { resetToUpload(); showError('任务已过期（服务重启后内存清空），请重新上传。'); return; }
+        if (!r.ok) { resetToUpload(); showError('任务已过期，请重新上传。'); return; }
         return r.json();
       }).then(job => {
         if (!job) return;
@@ -108,63 +111,68 @@
         else resetToUpload();
       }).catch(() => resetToUpload());
     } else {
-      // In progress — resume polling
       progressSection.classList.remove('hidden');
       startDetectAnim();
       setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
       pollJob(savedJobId);
     }
   } else {
-    // Home page — show history
     setToolbar([{type:'history'}]);
     renderRecentAnalyses();
     renderPromptHistory();
   }
 
-  let manageMode = false;
+  // ── Recent analyses with pagination ──
 
-  // Load saved max count from localStorage
-  function getMaxRecentCount() {
-    const v = parseInt(localStorage.getItem('maxRecentCount'));
-    return (v >= 1 && v <= 20) ? v : 6;
-  }
-  function setMaxRecentCount(n) {
-    localStorage.setItem('maxRecentCount', n);
+  function getSavedPerPage() {
+    const v = parseInt(localStorage.getItem('recentPerPage'));
+    return (v >= 1 && v <= 50) ? v : 8;
   }
 
   async function renderRecentAnalyses() {
     try {
-      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
-      const maxCount = getMaxRecentCount();
-      if (recents.length > maxCount) recents = recents.slice(0, maxCount);
-      if (recents.length === 0) {
+      allRecents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
+      if (allRecents.length === 0) {
         recentAnalyses.classList.add('hidden');
         return;
       }
+
+      recentPerPageCount = getSavedPerPage();
+      recentPerPage.value = recentPerPageCount;
+
+      const totalPages = Math.ceil(allRecents.length / recentPerPageCount);
+      if (recentPage >= totalPages) recentPage = totalPages - 1;
+      if (recentPage < 0) recentPage = 0;
+
+      const pageRecents = allRecents.slice(recentPage * recentPerPageCount, (recentPage + 1) * recentPerPageCount);
+
       recentAnalyses.classList.remove('hidden');
       recentList.innerHTML = '';
 
-      // Verify which jobs still exist on server, mark expired ones
       const checkResults = await Promise.allSettled(
-        recents.map(r => fetch('/api/jobs/' + r.jobId).then(res => ({ jobId: r.jobId, alive: res.ok })))
+        pageRecents.map(r => fetch('/api/jobs/' + r.jobId).then(res => ({ jobId: r.jobId, alive: res.ok })))
       );
       const aliveMap = new Map();
       checkResults.forEach(r => {
         if (r.status === 'fulfilled' && r.value) aliveMap.set(r.value.jobId, r.value.alive);
       });
 
-      recents.forEach(r => {
+      pageRecents.forEach(r => {
         const card = document.createElement('div');
         card.className = 'recent-card' + (manageMode ? ' delete-mode' : '');
         card.dataset.jobId = r.jobId;
         const isAlive = aliveMap.get(r.jobId) !== false;
+        const thumbUrl = '/api/jobs/' + r.jobId + '/thumb';
         card.innerHTML =
           '<input type="checkbox" class="recent-delete-check"' + (manageMode ? '' : ' style="display:none"') + '>' +
+          '<img class="recent-card-thumb" src="' + thumbUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+          '<div class="recent-card-body">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
           '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头</div>' +
           (isAlive
             ? '<div class="recent-card-status">已完成</div>'
-            : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>');
+            : '<div class="recent-card-status" style="background:rgba(247,74,92,0.15);color:var(--error)">已过期</div>') +
+          '</div>';
         card.addEventListener('click', (e) => {
           if (e.target.tagName === 'INPUT') return;
           if (manageMode) {
@@ -174,20 +182,71 @@
           } else if (isAlive) {
             switchToJob(r.jobId);
           } else {
-            alert('该任务已在服务端过期（重启后内存清空），请重新上传视频分析。');
+            alert('该任务已在服务端过期，请重新上传视频分析。');
           }
         });
         recentList.appendChild(card);
       });
 
-      // Show/hide management UI
+      renderPagination(totalPages);
+
       recentManageBtn.classList.toggle('hidden', manageMode);
       recentManageBar.classList.toggle('hidden', !manageMode);
-      if (manageMode) {
-        recentMaxCount.value = maxCount;
-        updateManageSelection();
-      }
+      recentPerPage.parentElement.style.display = manageMode ? 'none' : '';
+      if (manageMode) updateManageSelection();
     } catch { recentAnalyses.classList.add('hidden'); }
+  }
+
+  function renderPagination(totalPages) {
+    if (totalPages <= 1) {
+      recentPagination.classList.add('hidden');
+      return;
+    }
+    recentPagination.classList.remove('hidden');
+    recentPagination.innerHTML = '';
+
+    const create = (label, page, active, disabled) => {
+      const btn = document.createElement('button');
+      btn.className = 'pg-btn' + (active ? ' pg-btn-active' : '');
+      btn.textContent = label;
+      if (disabled) btn.disabled = true;
+      else btn.addEventListener('click', () => { recentPage = page; renderRecentAnalyses(); });
+      return btn;
+    };
+
+    recentPagination.appendChild(create('«', 0, false, recentPage === 0));
+    recentPagination.appendChild(create('‹', recentPage - 1, false, recentPage === 0));
+
+    const pages = [];
+    let start = Math.max(0, recentPage - 3);
+    let end = Math.min(totalPages - 1, recentPage + 3);
+    if (end - start < 6) {
+      if (start === 0) end = Math.min(totalPages - 1, start + 6);
+      else if (end === totalPages - 1) start = Math.max(0, end - 6);
+    }
+    if (start > 0) {
+      pages.push(0);
+      if (start > 1) pages.push('...');
+    }
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages - 1) {
+      if (end < totalPages - 2) pages.push('...');
+      pages.push(totalPages - 1);
+    }
+
+    pages.forEach(p => {
+      if (p === '...') {
+        const span = document.createElement('span');
+        span.className = 'pg-ellipsis';
+        span.textContent = '…';
+        recentPagination.appendChild(span);
+      } else {
+        recentPagination.appendChild(create(String(p + 1), p, p === recentPage, false));
+      }
+    });
+
+    recentPagination.appendChild(create('›', recentPage + 1, false, recentPage >= totalPages - 1));
+    recentPagination.appendChild(create('»', totalPages - 1, false, recentPage >= totalPages - 1));
   }
 
   function updateManageSelection() {
@@ -195,50 +254,47 @@
     const checked = recentList.querySelectorAll('.recent-delete-check:checked');
     recentSelectAll.checked = all.length > 0 && checked.length === all.length;
     recentSelectAll.indeterminate = checked.length > 0 && checked.length < all.length;
-    recentSelectedHint.textContent = checked.length > 0 ? `已选 ${checked.length} 项` : '';
+    recentSelectedHint.textContent = checked.length > 0 ? '已选 ' + checked.length + ' 项' : '';
   }
 
-  function enterManageMode() {
-    manageMode = true;
-    renderRecentAnalyses();
-  }
-
-  function exitManageMode() {
-    manageMode = false;
-    // Save max count
-    const n = parseInt(recentMaxCount.value);
-    if (n >= 1 && n <= 20) {
-      setMaxRecentCount(n);
-      // Trim localStorage if count reduced
-      let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
-      if (recents.length > n) {
-        recents = recents.slice(0, n);
-        localStorage.setItem('recentJobs', JSON.stringify(recents));
-      }
-    }
-    renderRecentAnalyses();
-  }
+  function enterManageMode() { manageMode = true; renderRecentAnalyses(); }
+  function exitManageMode() { manageMode = false; renderRecentAnalyses(); }
 
   async function deleteSelectedRecents() {
-    const checked = [...recentList.querySelectorAll('.recent-delete-check:checked')];
+    const checked = [].slice.call(recentList.querySelectorAll('.recent-delete-check:checked'));
     if (checked.length === 0) return;
     if (!confirm('确定要删除选中的 ' + checked.length + ' 条记录吗？\n\n这将同时清除服务端缓存（视频文件、分析结果等），不可恢复。')) return;
 
     const jobIds = checked.map(cb => cb.closest('.recent-card').dataset.jobId);
 
-    // Remove from localStorage
     let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
-    recents = recents.filter(r => !jobIds.includes(r.jobId));
+    recents = recents.filter(r => jobIds.indexOf(r.jobId) === -1);
     localStorage.setItem('recentJobs', JSON.stringify(recents));
 
-    // Delete server-side cache
     await fetch('/api/delete-jobs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jobIds }),
     }).catch(() => {});
 
+    recentPage = 0;
     exitManageMode();
   }
+
+  recentManageBtn.addEventListener('click', enterManageMode);
+  recentManageDoneBtn.addEventListener('click', exitManageMode);
+  recentDeleteBtn.addEventListener('click', deleteSelectedRecents);
+  recentSelectAll.addEventListener('change', () => {
+    const checked = recentSelectAll.checked;
+    recentList.querySelectorAll('.recent-delete-check').forEach(cb => { cb.checked = checked; });
+    updateManageSelection();
+  });
+
+  recentPerPage.addEventListener('change', () => {
+    recentPerPageCount = parseInt(recentPerPage.value);
+    localStorage.setItem('recentPerPage', recentPerPageCount);
+    recentPage = 0;
+    renderRecentAnalyses();
+  });
 
   // ── Prompt history ──
   function getPromptHistory() {
@@ -263,10 +319,7 @@
 
   function renderPromptHistory() {
     const h = getPromptHistory();
-    if (h.length === 0) {
-      promptHistory.classList.add('hidden');
-      return;
-    }
+    if (h.length === 0) { promptHistory.classList.add('hidden'); return; }
     promptHistory.classList.remove('hidden');
     promptHistory.innerHTML = '';
     h.forEach(text => {
@@ -291,12 +344,10 @@
     });
   }
 
-  // "添加" 按钮 — 把当前 textarea 内容保存为历史气泡
   customPromptSubmit.addEventListener('click', () => {
     const val = customPromptInput.value.trim();
     if (val) { savePromptHistory(val); customPromptInput.value = ''; }
   });
-  // Ctrl+Enter / Cmd+Enter 也可以添加
   customPromptInput.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -305,31 +356,18 @@
     }
   });
 
-  // Wire up management buttons
-  recentManageBtn.addEventListener('click', enterManageMode);
-  recentManageDoneBtn.addEventListener('click', exitManageMode);
-  recentDeleteBtn.addEventListener('click', deleteSelectedRecents);
-  recentSelectAll.addEventListener('change', () => {
-    const checked = recentSelectAll.checked;
-    recentList.querySelectorAll('.recent-delete-check').forEach(cb => { cb.checked = checked; });
-    updateManageSelection();
-  });
-
+  // ── Session & recents ──
   function saveSession(jobId, status) {
-    currentJobId = jobId;
-    currentJobStatus = status;
+    currentJobId = jobId; currentJobStatus = status;
     sessionStorage.setItem('jobId', jobId);
     sessionStorage.setItem('jobStatus', status);
   }
 
-  // Save completed job info for recent analyses on home page
   function saveRecent(jobId, name, shotCount) {
     try {
       let recents = JSON.parse(localStorage.getItem('recentJobs') || '[]');
       recents = recents.filter(r => r.jobId !== jobId);
       recents.unshift({ jobId, name, shotCount, time: Date.now() });
-      const maxCount = getMaxRecentCount();
-      if (recents.length > maxCount) recents = recents.slice(0, maxCount);
       localStorage.setItem('recentJobs', JSON.stringify(recents));
     } catch {}
   }
@@ -348,8 +386,6 @@
     currentJobId = null;
     currentJobStatus = null;
   }
-
-  // Note: localStorage history is NOT cleared on reset; only session is.
 
   // ── Tab switching ──
   tabFile.addEventListener('click', () => {
@@ -395,7 +431,7 @@
   lightbox.querySelector('.lightbox-backdrop').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 
-  // ── Range slider sync ──
+  // ── Range slider ──
   function updateRangeFill() {
     const min = parseInt(rangeStart.min), max = parseInt(rangeStart.max);
     const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
@@ -409,8 +445,6 @@
     if (parseInt(rangeStartNum.value) !== s) rangeStartNum.value = s;
     if (parseInt(rangeEndNum.value) !== e) rangeEndNum.value = e;
     rangeSelectedCount.textContent = e - s + 1;
-
-    // Highlight filmstrip
     updateFilmstrip(s, e);
   }
 
@@ -443,8 +477,6 @@
     const s = parseInt(rangeStart.value) - 1, e = parseInt(rangeEnd.value) - 1;
     rangeSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
-
-    // Fresh progress bar for analysis phase
     progressLog.innerHTML = '';
     setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
     fetch('/api/commit-range', {
@@ -454,31 +486,26 @@
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
       setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
-      // Reset log view for fresh analysis phase
       progressLog.innerHTML = '';
       pollJob(currentJobId);
     }).catch(e => showError(e.message));
   });
 
   // ── Toolbar ──
-
   function getJobHistory() {
     try { return JSON.parse(localStorage.getItem('jobHistory') || '[]'); } catch { return []; }
   }
-
   function addToHistory(jobId) {
     let h = getJobHistory().filter(id => id !== jobId);
     h.unshift(jobId);
     if (h.length > 10) h = h.slice(0, 10);
     localStorage.setItem('jobHistory', JSON.stringify(h));
   }
-
   function removeFromHistory(jobId) {
     const h = getJobHistory().filter(id => id !== jobId);
     localStorage.setItem('jobHistory', JSON.stringify(h));
     deleteRecent(jobId);
   }
-
   function loadJobList() {
     return fetch('/api/jobs').then(r => r.json()).catch(() => []);
   }
@@ -498,49 +525,32 @@
         const buildDropdown = async () => {
           dropdown.innerHTML = '<div style="padding:10px 14px;color:#8b8fa7;font-size:0.78rem">加载中...</div>';
           const jobs = await loadJobList();
-
           if (jobs.length === 0) {
             dropdown.innerHTML = '<div style="padding:10px 14px;color:#8b8fa7;font-size:0.8rem">暂无历史记录</div>';
             return;
           }
-
           const statusMap = {done:'✅',awaiting_range:'⏸',detecting_scenes:'🔍',extracting:'📸',extracting_frames:'📸',extracting_thumbs:'📸',analyzing:'🤖',downloading:'⬇',error:'❌',received:'📥'};
-
           dropdown.innerHTML = '';
           jobs.forEach(job => {
             const isCurrent = job.jobId === currentJobId;
             const icon = statusMap[job.status] || '⏳';
             const name = job.videoName || job.jobId.slice(0,8);
-            const summary = job.shotRange ? ` (${job.shotRange})` : job.totalShots ? ` (${job.totalShots}镜头)` : '';
-
+            const summary = job.shotRange ? ' (' + job.shotRange + ')' : job.totalShots ? ' (' + job.totalShots + '镜头)' : '';
             const row = document.createElement('div');
             row.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:0.8rem';
             if (isCurrent) row.style.background = 'rgba(74,108,247,0.1)';
-
             const left = document.createElement('div');
             left.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4e6f0';
             left.textContent = (isCurrent ? '● ' : '') + icon + ' ' + name + summary;
-
             const del = document.createElement('button');
             del.textContent = '✕';
             del.style.cssText = 'background:none;border:none;color:#8b8fa7;cursor:pointer;font-size:0.9rem;padding:0 4px;flex-shrink:0';
             del.title = '删除此记录';
-            del.addEventListener('click', (e) => {
-              e.stopPropagation();
-              removeFromHistory(job.jobId);
-              buildDropdown();
-            });
-
+            del.addEventListener('click', (e) => { e.stopPropagation(); removeFromHistory(job.jobId); buildDropdown(); });
             row.addEventListener('mouseenter', () => { if (!isCurrent) row.style.background = '#242734'; });
             row.addEventListener('mouseleave', () => { if (!isCurrent) row.style.background = ''; });
-            row.addEventListener('click', () => {
-              dropdown.style.display = 'none';
-              if (job.jobId === currentJobId) return;
-              switchToJob(job.jobId);
-            });
-
-            row.appendChild(left);
-            row.appendChild(del);
+            row.addEventListener('click', () => { dropdown.style.display = 'none'; if (job.jobId === currentJobId) return; switchToJob(job.jobId); });
+            row.appendChild(left); row.appendChild(del);
             dropdown.appendChild(row);
           });
         };
@@ -551,10 +561,8 @@
           buildDropdown();
           dropdown.style.display = 'block';
         });
-
         document.addEventListener('click', () => { dropdown.style.display = 'none'; });
-        wrap.appendChild(btn);
-        wrap.appendChild(dropdown);
+        wrap.appendChild(btn); wrap.appendChild(dropdown);
         headerToolbar.appendChild(wrap);
       } else {
         const btn = document.createElement('button');
@@ -566,8 +574,9 @@
     });
   }
 
+  function clearToolbar() { headerToolbar.innerHTML = ''; }
+
   async function switchToJob(jobId) {
-    // Hide all content sections first
     uploadSection.classList.add('hidden');
     rangeSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
@@ -575,20 +584,17 @@
     progressSection.classList.remove('hidden');
     setProgress(0, '加载中...', '');
     clearToolbar();
-
     try {
       const res = await fetch('/api/jobs/' + jobId);
       if (!res.ok) {
-        // Job expired on server — show as expired in recent list, don't delete
         progressSection.classList.add('hidden');
         errorSection.classList.remove('hidden');
-        errorMessage.textContent = '该任务已在服务端过期（重启后内存清空），无法恢复。请重新上传视频分析。';
+        errorMessage.textContent = '该任务已在服务端过期，无法恢复。请重新上传视频分析。';
         setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
         return;
       }
       const job = await res.json();
       currentJobId = job.jobId;
-
       if (job.status === 'awaiting_range' && job.sceneData) {
         saveSession(jobId, 'awaiting_range');
         progressSection.classList.add('hidden');
@@ -600,24 +606,19 @@
       } else if (job.status === 'error') {
         showError(job.error || '处理失败');
       } else {
-        // In progress
         saveSession(jobId, job.status);
         setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
         startDetectAnim();
         pollJob(jobId);
       }
-    } catch {
-      removeFromHistory(jobId);
-      resetToUpload();
-    }
+    } catch { removeFromHistory(jobId); resetToUpload(); }
   }
 
-  function clearToolbar() { headerToolbar.innerHTML = ''; }
   function handleFile(file) {
     uploadError.classList.add('hidden');
     const allowed = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) { showUploadError('不支持的文件格式：' + ext + '，支持 ' + allowed.join(', ')); return; }
+    if (allowed.indexOf(ext) === -1) { showUploadError('不支持的文件格式：' + ext + '，支持 ' + allowed.join(', ')); return; }
     if (file.size > 2 * 1024 * 1024 * 1024) { showUploadError('文件过大，最大支持 2GB'); return; }
     startUpload(file);
   }
@@ -628,16 +629,13 @@
     uploadSection.classList.add('hidden'); resultsSection.classList.add('hidden'); errorSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
     const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-    setProgress(0, '上传中...', `文件: ${file.name} (${sizeMB} MB)`);
+    setProgress(0, '上传中...', '文件: ' + file.name + ' (' + sizeMB + ' MB)');
     const xhr = new XMLHttpRequest();
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) {
         const upMB = (e.loaded / 1024 / 1024).toFixed(1), totMB = (e.total / 1024 / 1024).toFixed(1);
-        if (e.loaded >= e.total) {
-          setProgress(12, '文件已接收，准备分析...', totMB + ' MB — 等待服务端确认');
-        } else {
-          setProgress(Math.round((e.loaded / e.total) * 12), '上传中...', '已传输 ' + upMB + ' / ' + totMB + ' MB');
-        }
+        if (e.loaded >= e.total) setProgress(12, '文件已接收，准备分析...', totMB + ' MB');
+        else setProgress(Math.round((e.loaded / e.total) * 12), '上传中...', '已传输 ' + upMB + ' / ' + totMB + ' MB');
       }
     });
     xhr.addEventListener('load', () => {
@@ -654,7 +652,6 @@
     xhr.send(fd);
   }
 
-  // ── URL handling ──
   function handleUrlSubmit() {
     const url = urlInput.value.trim(); uploadError.classList.add('hidden');
     if (!url) { showUploadError('请输入视频链接'); return; }
@@ -679,14 +676,11 @@
   function pollJob(jobId) {
     if (pollTimer) clearInterval(pollTimer);
     let lastLogLen = 0;
-    let phase = 'unknown'; // 'detect' or 'analyze' — tracks which bar we're on
     pollTimer = setInterval(async () => {
       try {
         const res = await fetch('/api/jobs/' + jobId);
         if (!res.ok) throw new Error('获取任务状态失败');
         const job = await res.json();
-
-        // Show new backend log lines
         if (job.log && job.log.length > lastLogLen) {
           for (let i = lastLogLen; i < job.log.length; i++) {
             const line = document.createElement('div');
@@ -697,14 +691,11 @@
           lastLogLen = job.log.length;
           progressLog.scrollTop = progressLog.scrollHeight;
         }
-
         switch (job.status) {
-          // ── Detection phase bar ──
           case 'received': setProgress(3, '已接收', ''); break;
           case 'downloading': setProgress(3, '下载视频...', (job.progress || {}).downloaded ? job.progress.downloaded : ''); break;
-          case 'detecting_scenes': break; // animated by startDetectAnim
+          case 'detecting_scenes': break;
           case 'extracting_thumbs':
-            phase = 'detect';
             stopDetectAnim();
             { const p = job.progress; setProgress(10 + Math.round((p.current / (p.total || 1)) * 88), '抽取缩略图...', p.current + ' / ' + p.total); }
             break;
@@ -715,8 +706,6 @@
             progressSection.classList.add('hidden');
             if (job.sceneData) showRangeSelector(job.sceneData);
             break;
-
-          // ── Analysis phase bar (resets to 0 when user confirms range) ──
           case 'extracting': case 'extracting_frames':
             stopDetectAnim();
             { const p = job.progress; setProgress(Math.round((p.current / (p.total || 1)) * 15), '抽取音频片段...', p.current + ' / ' + p.total); }
@@ -746,13 +735,8 @@
     }, 1500);
   }
 
-  function setProgress(pct, label, detail) {
-    progressBar.style.width = pct + '%';
-    progressLabel.textContent = label;
-    progressDetail.textContent = detail;
-  }
+  function setProgress(pct, label, detail) { progressBar.style.width = pct + '%'; progressLabel.textContent = label; progressDetail.textContent = detail; }
 
-  // ── Animated progress for detect phase ──
   function startDetectAnim() {
     stopDetectAnim();
     progressBar.classList.add('breathing');
@@ -760,12 +744,10 @@
     progressAnimTimer = setInterval(() => {
       tick++;
       const elapsed = Math.floor((Date.now() - start) / 1000);
-      // Slow creep 3% → 12% over ~60s, never backward
       const pct = Math.min(3 + tick * 0.15, 12);
       setProgress(Math.round(pct), '检测镜头切换' + '.'.repeat((tick % 3) + 1), '已耗时 ' + elapsed + ' 秒');
     }, 300);
   }
-
   function stopDetectAnim() {
     progressBar.classList.remove('breathing');
     if (progressAnimTimer) { clearInterval(progressAnimTimer); progressAnimTimer = null; }
@@ -778,8 +760,6 @@
     [rangeStart, rangeStartNum].forEach(el => { el.min = 1; el.max = total; el.value = 1; });
     [rangeEnd, rangeEndNum].forEach(el => { el.min = 1; el.max = total; el.value = Math.min(total, 10); });
     rangeSelectedCount.textContent = Math.min(total, 10);
-
-    // Build filmstrip
     filmstrip.innerHTML = '';
     const thumbBase = sceneData.thumbBase || '/api/frames/' + currentJobId + '/';
     for (let i = 0; i < total; i++) {
@@ -788,24 +768,16 @@
       item.dataset.index = i + 1;
       item.innerHTML =
         '<img src="' + thumbBase + i + '" alt="镜头 ' + (i + 1) + '" loading="lazy"' +
-        ' onerror="this.outerHTML=\'<div style=width:120px;height:68px;display:flex;align-items:center;justify-content:center;background:var(--border);color:var(--text-secondary);font-size:0.75rem;border-radius:4px>↓</div>\'">' +
+        ' onerror="this.outerHTML=\'<div style=width:120px;height:68px;display:flex;align-items:center;justify-content:center;background:var(--border);color:var(--text-secondary);font-size:0.75rem;border-radius:4px>&darr;</div>\'">' +
         '<div class="filmstrip-item-label">镜头 ' + (i + 1) + '</div>';
-      item.addEventListener('click', () => {
-        rangeStart.value = i + 1;
-        rangeEnd.value = i + 1;
-        updateRangeFill();
-      });
+      item.addEventListener('click', () => { rangeStart.value = i + 1; rangeEnd.value = i + 1; updateRangeFill(); });
       filmstrip.appendChild(item);
     }
-
     updateRangeFill();
     rangeSection.classList.remove('hidden');
     rangeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
     const btns = [{type:'history'},{text:'返回首页',onClick:resetToUpload}];
-    if (cameFromResults) {
-      btns.splice(1, 0, {text:'← 返回结果',primary:true,onClick:backToResults});
-    }
+    if (cameFromResults) btns.splice(1, 0, {text:'← 返回结果',primary:true,onClick:backToResults});
     setToolbar(btns);
   }
 
@@ -819,32 +791,27 @@
   }
 
   function updateFilmstrip(startIdx, endIdx) {
-    const items = filmstrip.querySelectorAll('.filmstrip-item');
-    items.forEach(item => {
+    filmstrip.querySelectorAll('.filmstrip-item').forEach(item => {
       const idx = parseInt(item.dataset.index);
-      if (idx >= startIdx && idx <= endIdx) {
-        item.classList.add('selected');
-      } else {
-        item.classList.remove('selected');
-      }
+      item.classList.toggle('selected', idx >= startIdx && idx <= endIdx);
     });
   }
+
   function showResults(job) {
     progressSection.classList.add('hidden');
     resultsSection.classList.remove('hidden');
     const r = job.results;
     resultsTitle.textContent = r.videoFile || '分析结果';
-    resultsMeta.textContent = r.shotRange ? `镜头 ${r.shotRange}（共 ${r.totalShots} 个）` : `${r.totalShots} 个镜头`;
-    resultsMeta.textContent += r.hasAudio ? ' · 含台词识别' : '';
-    if (r.duration) resultsMeta.textContent += ' · ' + formatDuration(r.duration);
-
+    resultsMeta.textContent = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
+    resultsMeta.textContent += r.hasAudio ? ' . 含台词识别' : '';
+    if (r.duration) resultsMeta.textContent += ' . ' + formatDuration(r.duration);
     shotsTimeline.innerHTML = '';
     r.shots.forEach((shot) => {
       const card = document.createElement('div');
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
       let html = '<div class="shot-thumb"><img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy"><span class="shot-time-badge">' + time + '</span></div>';
-      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' · ' + formatDuration(shot.duration) + '</div>';
+      html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '</div>';
       html += '<div class="shot-section-label">画面</div><p class="shot-desc">' + escapeHtml(shot.description) + '</p>';
       if (shot.audioDescription) {
         html += '<div class="shot-section-label audio-label">台词</div><p class="shot-audio-desc">' + escapeHtml(shot.audioDescription) + '</p>';
@@ -857,29 +824,18 @@
       shotsTimeline.appendChild(card);
     });
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    setToolbar([
-      {type:'history'},
-      {text:'分析其他镜头',onClick:backToRange},
-      {text:'分析新视频',primary:true,onClick:resetToUpload},
-    ]);
-
-    // Remember for home page
+    setToolbar([{type:'history'},{text:'分析其他镜头',onClick:backToRange},{text:'分析新视频',primary:true,onClick:resetToUpload}]);
     if (r) saveRecent(job.jobId, r.videoFile || '未知', r.totalShots);
   }
 
   function backToRange() {
     resultsSection.classList.add('hidden');
     cameFromResults = true;
-
     fetch('/api/jobs/' + currentJobId).then(r => r.json()).then(job => {
       if (!job.sceneData) { resetToUpload(); return; }
-
-      // Check if frames are missing — if so, re-extract
       const testImg = new Image();
       testImg.onload = () => showRangeSelector(job.sceneData);
       testImg.onerror = () => {
-        // Frames missing, trigger re-extraction
         progressSection.classList.remove('hidden');
         setProgress(0, '抽取缩略图...', '');
         setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
@@ -895,9 +851,8 @@
     }).catch(() => resetToUpload());
   }
 
-  // ── Copy / Export ──
   function copyAllDescriptions() {
-    const lines = [...shotsTimeline.querySelectorAll('.shot-card')].map(card => {
+    const lines = [].slice.call(shotsTimeline.querySelectorAll('.shot-card')).map(card => {
       const t = card.querySelector('.shot-time-badge'), d = card.querySelector('.shot-desc'), a = card.querySelector('.shot-audio-desc');
       let text = '[' + (t ? t.textContent : '') + ']\n' + (d ? d.textContent : '');
       if (a) text += '\n[台词] ' + a.textContent;
@@ -909,17 +864,15 @@
   }
 
   function exportToFile() {
-    // Use server-side export to get proper UTF-8 Content-Disposition for Chinese filenames
     if (!currentJobId) return alert('任务已过期，请重新分析');
     const link = document.createElement('a');
     link.href = '/api/export/' + currentJobId;
-    link.download = ''; // server sets the filename via Content-Disposition
+    link.download = '';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   }
 
-  // ── Clear cache ──
   function clearCache() {
     if (!confirm('确定要清除所有缓存吗？\n\n将删除所有已上传的视频、分析结果和任务记录。')) return;
     clearCacheBtn.textContent = '清理中...'; clearCacheBtn.disabled = true;
@@ -931,12 +884,11 @@
     }).catch(e => alert('清理失败：' + e.message)).finally(() => { clearCacheBtn.textContent = '清除缓存'; clearCacheBtn.disabled = false; });
   }
 
-  // ── Lightbox ──
   function openLightbox(src) { lightboxImg.src = src; lightbox.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
   function closeLightbox() { lightbox.classList.add('hidden'); document.body.style.overflow = ''; }
 
-  // ── Error ──
   function showError(msg) { stopDetectAnim(); progressSection.classList.add('hidden'); rangeSection.classList.add('hidden'); errorSection.classList.remove('hidden'); errorMessage.textContent = msg; }
+
   function resetToUpload() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     stopDetectAnim();
@@ -944,8 +896,7 @@
     location.reload();
   }
 
-  // ── Utilities ──
   function formatTimecode(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
   function formatDuration(s) { if (s < 60) return Math.round(s) + '秒'; return Math.floor(s / 60) + '分' + Math.round(s % 60) + '秒'; }
-  function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
 })();
