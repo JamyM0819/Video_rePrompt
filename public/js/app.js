@@ -80,8 +80,14 @@
   // ── Config panel ──
   const configToggle = document.getElementById('configToggle');
   const configBody = document.getElementById('configBody');
-  const configSaveBtn = document.getElementById('configSaveBtn');
+  const cfgVisionSave = document.getElementById('cfgVisionSave');
+  const cfgAudioSave = document.getElementById('cfgAudioSave');
   const configStatus = document.getElementById('configStatus');
+  function setConfigStatus(text, cls) {
+    if (!configStatus) return;
+    configStatus.textContent = text;
+    if (cls != null) configStatus.className = cls;
+  }
   const cfgCustomVision = document.getElementById('cfgVisionProviderCustom');
   const cfgCustomAudio = document.getElementById('cfgAudioProviderCustom');
 
@@ -165,15 +171,66 @@
     return payload;
   }
 
-  async function applyConfigToServer() {
-    const payload = buildConfigPayload();
-    saveConfigToLocal();
+  configToggle.addEventListener('click', () => {
+    configBody.classList.toggle('hidden');
+    // Take current snapshots when opening panel
+    if (!configBody.classList.contains('hidden')) {
+      visionSnapshot = fieldSnap('VISION');
+      audioSnapshot = fieldSnap('AUDIO');
+      refreshBtns();
+    }
+  });
 
-    configSaveBtn.disabled = true;
-    configSaveBtn.textContent = '应用...';
-    configStatus.textContent = '';
-    configStatus.className = 'config-status';
+  // ── Per-panel save + dirty tracking ──
+  const VISION_FIELD_KEYS = ['VISION_PROVIDER', 'VISION_BASE_URL', 'VISION_API_KEY', 'VISION_MODEL', 'VISION_CONCURRENCY', 'VISION_MAX_TOKENS'];
+  const AUDIO_FIELD_KEYS = ['AUDIO_PROVIDER', 'AUDIO_BASE_URL', 'AUDIO_API_KEY', 'AUDIO_MODEL', 'AUDIO_CONCURRENCY'];
+
+  let visionSnapshot = '';
+  let audioSnapshot = '';
+
+  function fieldSnap(type) {
+    const keys = type === 'VISION' ? VISION_FIELD_KEYS : AUDIO_FIELD_KEYS;
+    const extra = type === 'VISION' ? cfgCustomVision.value : cfgCustomAudio.value;
+    return keys.map(k => cfgFields[k].value).join('|') + '|' + extra;
+  }
+
+  function isDirty(type) {
+    return fieldSnap(type) !== (type === 'VISION' ? visionSnapshot : audioSnapshot);
+  }
+
+  function setBtnClean(btn) {
+    btn.classList.remove('dirty');
+    btn.textContent = '✓ 已保存';
+    btn.disabled = true;
+  }
+
+  function setBtnDirty(btn) {
+    btn.classList.add('dirty');
+    btn.textContent = btn === cfgVisionSave ? '保存视觉配置' : '保存音频配置';
+    btn.disabled = false;
+  }
+
+  function refreshBtns() {
+    isDirty('VISION') ? setBtnDirty(cfgVisionSave) : setBtnClean(cfgVisionSave);
+    isDirty('AUDIO') ? setBtnDirty(cfgAudioSave) : setBtnClean(cfgAudioSave);
+  }
+
+  // Hook field changes → refresh buttons
+  [...VISION_FIELD_KEYS, ...AUDIO_FIELD_KEYS].forEach(k => {
+    cfgFields[k].addEventListener('input', refreshBtns);
+    cfgFields[k].addEventListener('change', refreshBtns);
+  });
+  cfgCustomVision.addEventListener('input', refreshBtns);
+  cfgCustomAudio.addEventListener('input', refreshBtns);
+
+  // Save & sync snapshot
+  async function savePanel(type) {
+    const btn = type === 'VISION' ? cfgVisionSave : cfgAudioSave;
+    btn.disabled = true;
+    btn.textContent = '保存中...';
     try {
+      savePreset(type);
+      const payload = buildConfigPayload();
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,70 +238,19 @@
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const result = await res.json();
-      configStatus.textContent = '✓ 已生效' + (result.active ? ' — ' + result.active.VISION_MODEL + ' / ' + result.active.AUDIO_MODEL : '');
-      configStatus.className = 'config-status';
+      setConfigStatus('✓ 已生效' + (result.active ? ' — ' + result.active.VISION_MODEL + ' / ' + result.active.AUDIO_MODEL : ''), 'config-status');
+      // Update snapshot so the button becomes clean
+      if (type === 'VISION') visionSnapshot = fieldSnap('VISION');
+      else audioSnapshot = fieldSnap('AUDIO');
+      setBtnClean(btn);
     } catch (e) {
-      configStatus.textContent = '✕ ' + e.message;
-      configStatus.className = 'config-status error';
+      setConfigStatus('✕ ' + e.message, 'config-status error');
+      btn.disabled = false;
     }
-    configSaveBtn.disabled = false;
-    configSaveBtn.textContent = '保存并应用';
   }
 
-  configToggle.addEventListener('click', () => {
-    configBody.classList.toggle('hidden');
-  });
-
-  configSaveBtn.addEventListener('click', () => { saveConfigPreset(); applyConfigToServer(); });
-
-  // "从服务端同步" — pull current server config into form fields
-  document.getElementById('configSyncFromServer').addEventListener('click', async () => {
-    const btn = document.getElementById('configSyncFromServer');
-    btn.disabled = true; btn.textContent = '同步中...';
-    try {
-      const res = await fetch('/api/config');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const cfg = await res.json();
-      // Fill form fields from server config
-      if (cfg.VISION_PROVIDER) {
-        if (VISION_PRESETS[cfg.VISION_PROVIDER]) {
-          cfgFields.VISION_PROVIDER.value = cfg.VISION_PROVIDER;
-          cfgCustomVision.classList.add('hidden');
-        } else {
-          cfgFields.VISION_PROVIDER.value = '__custom__';
-          cfgCustomVision.value = cfg.VISION_PROVIDER;
-          cfgCustomVision.classList.remove('hidden');
-        }
-        cfgFields.VISION_BASE_URL.value = cfg.VISION_BASE_URL || '';
-        cfgFields.VISION_MODEL.value = cfg.VISION_MODEL || '';
-        cfgFields.VISION_CONCURRENCY.value = cfg.VISION_CONCURRENCY || '3';
-        cfgFields.VISION_MAX_TOKENS.value = cfg.VISION_MAX_TOKENS || '1024';
-        cfgFields.VISION_API_KEY.value = (cfg.VISION_API_KEY && cfg.VISION_API_KEY !== '***') ? cfg.VISION_API_KEY : '';
-      }
-      if (cfg.AUDIO_PROVIDER) {
-        if (AUDIO_PRESETS[cfg.AUDIO_PROVIDER] || cfg.AUDIO_PROVIDER === 'none') {
-          cfgFields.AUDIO_PROVIDER.value = cfg.AUDIO_PROVIDER;
-          cfgCustomAudio.classList.add('hidden');
-        } else {
-          cfgFields.AUDIO_PROVIDER.value = '__custom__';
-          cfgCustomAudio.value = cfg.AUDIO_PROVIDER;
-          cfgCustomAudio.classList.remove('hidden');
-        }
-        cfgFields.AUDIO_BASE_URL.value = cfg.AUDIO_BASE_URL || '';
-        cfgFields.AUDIO_MODEL.value = cfg.AUDIO_MODEL || '';
-        cfgFields.AUDIO_CONCURRENCY.value = cfg.AUDIO_CONCURRENCY || '1';
-        cfgFields.AUDIO_API_KEY.value = (cfg.AUDIO_API_KEY && cfg.AUDIO_API_KEY !== '***') ? cfg.AUDIO_API_KEY : '';
-      }
-      configStatus.textContent = '✓ 已从服务端同步配置';
-      configStatus.className = 'config-status';
-      // Also auto-save a preset chip so next time it's visible
-      saveConfigPreset();
-    } catch (e) {
-      configStatus.textContent = '✕ ' + e.message;
-      configStatus.className = 'config-status error';
-    }
-    btn.disabled = false; btn.textContent = '从服务端同步';
-  });
+  cfgVisionSave.addEventListener('click', () => savePanel('VISION'));
+  cfgAudioSave.addEventListener('click', () => savePanel('AUDIO'));
 
   // Provider presets — auto-fill Base URL & Model when switching provider
   const VISION_PRESETS = {
@@ -261,90 +267,138 @@
     none:       { baseUrl: '', model: '' },
   };
 
-  // ── Config presets: save/restore full config as chips ──
-  const configPresets = document.getElementById('configPresets');
+  // ── Config presets: separate vision / audio chips ──
+  const cfgVisionPresets = document.getElementById('cfgVisionPresets');
+  const cfgAudioPresets = document.getElementById('cfgAudioPresets');
 
-  function getConfigPresets() {
-    try { return JSON.parse(localStorage.getItem('appConfigPresets') || '[]'); } catch { return []; }
+  function getPresets(type) {
+    try { return JSON.parse(localStorage.getItem('pre_' + type) || '[]'); } catch { return []; }
   }
-  async function saveConfigPresetsToServer(presets) {
+  function setPresets(type, arr) {
+    localStorage.setItem('pre_' + type, JSON.stringify(arr));
+  }
+  async function savePresetsToServer() {
     try {
-      // Strip _l and _t fields before sending (they're UI-only)
-      const clean = presets.map(p => { const c = { ...p }; delete c._l; delete c._t; return c; });
-      await fetch('/api/config-presets', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clean),
-      });
+      const data = {
+        VISION: getPresets('VISION').map(p => { const c={...p}; delete c._l; delete c._t; return c; }),
+        AUDIO: getPresets('AUDIO').map(p => { const c={...p}; delete c._l; delete c._t; return c; }),
+      };
+      await fetch('/api/config-presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     } catch {}
   }
-  function saveConfigPreset() {
-    const payload = buildConfigPayload();
-    const label = (payload.VISION_PROVIDER||'?').slice(0,12) + '/' + (payload.VISION_MODEL||'').slice(0,15) + ' | ' + (payload.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (payload.AUDIO_MODEL||'').slice(0,12);
-    let presets = getConfigPresets().filter(p => (p.VISION_PROVIDER+'|||'+p.AUDIO_PROVIDER) !== (payload.VISION_PROVIDER+'|||'+payload.AUDIO_PROVIDER));
-    presets.unshift({ ...payload, _l: label, _t: Date.now() });
-    if (presets.length > 8) presets = presets.slice(0, 8);
-    localStorage.setItem('appConfigPresets', JSON.stringify(presets));
-    saveConfigPresetsToServer(presets);
-    renderConfigPresets();
+  async function loadPresetsFromServer() {
+    try {
+      const res = await fetch('/api/config-presets');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.VISION && Array.isArray(data.VISION)) {
+        const enr = data.VISION.map((p,i) => ({ ...p, _l: (p.PROVIDER||'?').slice(0,12)+'/'+(p.MODEL||'').slice(0,20), _t: Date.now()-i*1000 }));
+        setPresets('VISION', enr);
+      }
+      if (data && data.AUDIO && Array.isArray(data.AUDIO)) {
+        const enr = data.AUDIO.map((p,i) => ({ ...p, _l: (p.PROVIDER||'?').slice(0,12)+'/'+(p.MODEL||'').slice(0,20), _t: Date.now()-i*1000 }));
+        setPresets('AUDIO', enr);
+      }
+      renderPresets('VISION');
+      renderPresets('AUDIO');
+    } catch {}
   }
-  async function deleteConfigPreset(i) {
-    let presets = getConfigPresets(); presets.splice(i, 1);
-    localStorage.setItem('appConfigPresets', JSON.stringify(presets));
-    await saveConfigPresetsToServer(presets);
-    renderConfigPresets();
+
+  // Build a single-side preset from current form values
+  function buildPreset(type) {
+    if (type === 'VISION') return {
+      PROVIDER: getProviderValue(cfgFields.VISION_PROVIDER, cfgCustomVision),
+      BASE_URL: cfgFields.VISION_BASE_URL.value,
+      API_KEY: cfgFields.VISION_API_KEY.value,
+      MODEL: cfgFields.VISION_MODEL.value,
+      CONCURRENCY: cfgFields.VISION_CONCURRENCY.value,
+      MAX_TOKENS: cfgFields.VISION_MAX_TOKENS.value,
+    };
+    return {
+      PROVIDER: getProviderValue(cfgFields.AUDIO_PROVIDER, cfgCustomAudio),
+      BASE_URL: cfgFields.AUDIO_BASE_URL.value,
+      API_KEY: cfgFields.AUDIO_API_KEY.value,
+      MODEL: cfgFields.AUDIO_MODEL.value,
+      CONCURRENCY: cfgFields.AUDIO_CONCURRENCY.value,
+    };
   }
-  async function applyConfigPreset(i) {
-    var preset = getConfigPresets()[i]; if (!preset) return;
-    // Apply each field directly
-    if (preset.VISION_PROVIDER) {
-      if (VISION_PRESETS[preset.VISION_PROVIDER]) {
-        cfgFields.VISION_PROVIDER.value = preset.VISION_PROVIDER;
+
+  function savePreset(type) {
+    const preset = buildPreset(type);
+    preset._l = (preset.PROVIDER||'?').slice(0,12) + '/' + (preset.MODEL||'').slice(0,20);
+    preset._t = Date.now();
+    const key = type === 'VISION' ? (preset.PROVIDER+'|||'+preset.MODEL) : (preset.PROVIDER+'|||'+preset.MODEL);
+    let arr = getPresets(type).filter(p => (p.PROVIDER+'|||'+p.MODEL) !== key);
+    arr.unshift(preset);
+    if (arr.length > 6) arr = arr.slice(0, 6);
+    setPresets(type, arr);
+    savePresetsToServer();
+    renderPresets(type);
+  }
+
+  async function deletePreset(type, i) {
+    let arr = getPresets(type); arr.splice(i, 1);
+    setPresets(type, arr);
+    await savePresetsToServer();
+    renderPresets(type);
+  }
+
+  function applyPreset(type, i) {
+    const preset = getPresets(type)[i]; if (!preset) return;
+    const prefix = type === 'VISION' ? 'VISION' : 'AUDIO';
+    if (type === 'VISION') {
+      if (preset.PROVIDER && VISION_PRESETS[preset.PROVIDER]) {
+        cfgFields.VISION_PROVIDER.value = preset.PROVIDER;
         cfgCustomVision.classList.add('hidden');
-      } else {
+      } else if (preset.PROVIDER) {
         cfgFields.VISION_PROVIDER.value = '__custom__';
-        cfgCustomVision.value = preset.VISION_PROVIDER;
+        cfgCustomVision.value = preset.PROVIDER;
         cfgCustomVision.classList.remove('hidden');
       }
-    }
-    if (preset.VISION_BASE_URL != null) cfgFields.VISION_BASE_URL.value = preset.VISION_BASE_URL;
-    if (preset.VISION_API_KEY != null) cfgFields.VISION_API_KEY.value = preset.VISION_API_KEY;
-    if (preset.VISION_MODEL != null) cfgFields.VISION_MODEL.value = preset.VISION_MODEL;
-    if (preset.VISION_CONCURRENCY != null) cfgFields.VISION_CONCURRENCY.value = preset.VISION_CONCURRENCY;
-    if (preset.VISION_MAX_TOKENS != null) cfgFields.VISION_MAX_TOKENS.value = preset.VISION_MAX_TOKENS;
-    if (preset.AUDIO_PROVIDER) {
-      if (AUDIO_PRESETS[preset.AUDIO_PROVIDER]) {
-        cfgFields.AUDIO_PROVIDER.value = preset.AUDIO_PROVIDER;
+      if (preset.BASE_URL != null) cfgFields.VISION_BASE_URL.value = preset.BASE_URL;
+      if (preset.API_KEY != null) cfgFields.VISION_API_KEY.value = preset.API_KEY;
+      if (preset.MODEL != null) cfgFields.VISION_MODEL.value = preset.MODEL;
+      if (preset.CONCURRENCY != null) cfgFields.VISION_CONCURRENCY.value = preset.CONCURRENCY;
+      if (preset.MAX_TOKENS != null) cfgFields.VISION_MAX_TOKENS.value = preset.MAX_TOKENS;
+    } else {
+      if (preset.PROVIDER && AUDIO_PRESETS[preset.PROVIDER]) {
+        cfgFields.AUDIO_PROVIDER.value = preset.PROVIDER;
         cfgCustomAudio.classList.add('hidden');
-      } else if (preset.AUDIO_PROVIDER === 'none') {
+      } else if (preset.PROVIDER === 'none') {
         cfgFields.AUDIO_PROVIDER.value = 'none';
         cfgCustomAudio.classList.add('hidden');
-      } else {
+      } else if (preset.PROVIDER) {
         cfgFields.AUDIO_PROVIDER.value = '__custom__';
-        cfgCustomAudio.value = preset.AUDIO_PROVIDER;
+        cfgCustomAudio.value = preset.PROVIDER;
         cfgCustomAudio.classList.remove('hidden');
       }
+      if (preset.BASE_URL != null) cfgFields.AUDIO_BASE_URL.value = preset.BASE_URL;
+      if (preset.API_KEY != null) cfgFields.AUDIO_API_KEY.value = preset.API_KEY;
+      if (preset.MODEL != null) cfgFields.AUDIO_MODEL.value = preset.MODEL;
+      if (preset.CONCURRENCY != null) cfgFields.AUDIO_CONCURRENCY.value = preset.CONCURRENCY;
     }
-    if (preset.AUDIO_BASE_URL != null) cfgFields.AUDIO_BASE_URL.value = preset.AUDIO_BASE_URL;
-    if (preset.AUDIO_API_KEY != null) cfgFields.AUDIO_API_KEY.value = preset.AUDIO_API_KEY;
-    if (preset.AUDIO_MODEL != null) cfgFields.AUDIO_MODEL.value = preset.AUDIO_MODEL;
-    if (preset.AUDIO_CONCURRENCY != null) cfgFields.AUDIO_CONCURRENCY.value = preset.AUDIO_CONCURRENCY;
-    configStatus.textContent = '✓ 已加载配置'; configStatus.className = 'config-status';
+    setConfigStatus('✓ 已加载' + (type === 'VISION' ? '视觉' : '音频') + '预设', 'config-status');
+    // Preset has changed form values → button should light up
+    setBtnDirty(type === 'VISION' ? cfgVisionSave : cfgAudioSave);
   }
-  function renderConfigPresets() {
-    const presets = getConfigPresets();
-    configPresets.classList.toggle('hidden', presets.length === 0);
-    configPresets.innerHTML = '';
+
+  function renderPresets(type) {
+    const presets = getPresets(type);
+    const el = type === 'VISION' ? cfgVisionPresets : cfgAudioPresets;
+    if (presets.length === 0) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    el.classList.remove('hidden');
+    el.innerHTML = '';
     presets.forEach((p, i) => {
       const chip = document.createElement('div');
       chip.className = 'preset-chip';
-      chip.title = p.VISION_PROVIDER + '/' + p.VISION_MODEL + '\n' + p.AUDIO_PROVIDER + '/' + p.AUDIO_MODEL;
-      const lb = document.createElement('span'); lb.className = 'preset-chip-label'; lb.textContent = '配置' + (i + 1);
+      chip.title = p.PROVIDER + '/' + p.MODEL;
+      const lb = document.createElement('span'); lb.className = 'preset-chip-label'; lb.textContent = (type === 'VISION' ? '视' : '音') + (i + 1);
       const nm = document.createElement('span'); nm.className = 'preset-chip-name'; nm.textContent = p._l;
       const dl = document.createElement('span'); dl.className = 'preset-chip-del'; dl.textContent = '✕';
-      dl.addEventListener('click', e => { e.stopPropagation(); deleteConfigPreset(i); });
-      chip.addEventListener('click', () => applyConfigPreset(i));
+      dl.addEventListener('click', e => { e.stopPropagation(); deletePreset(type, i); });
+      chip.addEventListener('click', () => applyPreset(type, i));
       chip.appendChild(lb); chip.appendChild(nm); chip.appendChild(dl);
-      configPresets.appendChild(chip);
+      el.appendChild(chip);
     });
   }
 
@@ -418,46 +472,31 @@
 
   // Pull presets from server (cross-browser), merge into localStorage
   (async () => {
-    try {
-      const res = await fetch('/api/config-presets');
-      if (!res.ok) return;
-      const serverPresets = await res.json();
-      if (serverPresets.length > 0) {
-        // Add _l and _t UI fields
-        const enriched = serverPresets.map((p, i) => ({
-          ...p,
-          _l: (p.VISION_PROVIDER||'?').slice(0,12) + '/' + (p.VISION_MODEL||'').slice(0,15) + ' | ' + (p.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (p.AUDIO_MODEL||'').slice(0,12),
-          _t: Date.now() - i * 1000,
-        }));
-        localStorage.setItem('appConfigPresets', JSON.stringify(enriched));
-        renderConfigPresets();
-      } else {
-        // No presets yet — if server has an active config, auto-create a chip from it
-        try {
-          const cfg = await fetch('/api/config').then(r => r.json());
-          if (cfg.VISION_PROVIDER) {
-            const payload = {
-              VISION_PROVIDER: cfg.VISION_PROVIDER,
-              VISION_BASE_URL: cfg.VISION_BASE_URL || '',
-              VISION_API_KEY: '', // server hides this
-              VISION_MODEL: cfg.VISION_MODEL || '',
-              VISION_CONCURRENCY: cfg.VISION_CONCURRENCY || '3',
-              VISION_MAX_TOKENS: cfg.VISION_MAX_TOKENS || '1024',
-              AUDIO_PROVIDER: cfg.AUDIO_PROVIDER,
-              AUDIO_BASE_URL: cfg.AUDIO_BASE_URL || '',
-              AUDIO_API_KEY: '',
-              AUDIO_MODEL: cfg.AUDIO_MODEL || '',
-              AUDIO_CONCURRENCY: cfg.AUDIO_CONCURRENCY || '1',
-              _l: (cfg.VISION_PROVIDER||'?').slice(0,12) + '/' + (cfg.VISION_MODEL||'').slice(0,15) + ' | ' + (cfg.AUDIO_PROVIDER||'?').slice(0,8) + '/' + (cfg.AUDIO_MODEL||'').slice(0,12),
-              _t: Date.now(),
-            };
-            localStorage.setItem('appConfigPresets', JSON.stringify([payload]));
-            saveConfigPresetsToServer([payload]);
-            renderConfigPresets();
-          }
-        } catch {}
-      }
-    } catch {}
+    // Load presets from server first
+    await loadPresetsFromServer();
+
+    // Take initial snapshots after all loading is done
+    setTimeout(() => { visionSnapshot = fieldSnap('VISION'); audioSnapshot = fieldSnap('AUDIO'); refreshBtns(); }, 500);
+
+    // If still no presets locally, auto-create from active server config
+    if (getPresets('VISION').length === 0 || getPresets('AUDIO').length === 0) {
+      try {
+        const cfg = await fetch('/api/config').then(r => r.json());
+        // Create vision preset from server state
+        if (cfg.VISION_PROVIDER && getPresets('VISION').length === 0) {
+          const p = { PROVIDER: cfg.VISION_PROVIDER, BASE_URL: cfg.VISION_BASE_URL||'', API_KEY: '', MODEL: cfg.VISION_MODEL||'', CONCURRENCY: cfg.VISION_CONCURRENCY||'3', MAX_TOKENS: cfg.VISION_MAX_TOKENS||'1024', _l: (cfg.VISION_PROVIDER||'?').slice(0,12)+'/'+(cfg.VISION_MODEL||'').slice(0,20), _t: Date.now() };
+          setPresets('VISION', [p]);
+        }
+        // Create audio preset from server state
+        if (cfg.AUDIO_PROVIDER && getPresets('AUDIO').length === 0) {
+          const p = { PROVIDER: cfg.AUDIO_PROVIDER, BASE_URL: cfg.AUDIO_BASE_URL||'', API_KEY: '', MODEL: cfg.AUDIO_MODEL||'', CONCURRENCY: cfg.AUDIO_CONCURRENCY||'1', _l: (cfg.AUDIO_PROVIDER||'?').slice(0,12)+'/'+(cfg.AUDIO_MODEL||'').slice(0,20), _t: Date.now() };
+          setPresets('AUDIO', [p]);
+        }
+        await savePresetsToServer();
+        renderPresets('VISION');
+        renderPresets('AUDIO');
+      } catch {}
+    }
   })();
 
   // On startup, sync non-sensitive fields to server (API keys already on disk)

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
   <div class="app">
@@ -112,6 +112,7 @@
         <div id="promptHistory" class="prompt-history hidden"></div>
         <div class="config-panel">
           <button id="configToggle" class="config-toggle">⚙ 接口配置</button>
+          <span id="configStatus" class="config-status"></span>
           <div id="configBody" class="config-body hidden">
             <div class="config-grid">
               <div class="config-group">
@@ -134,7 +135,14 @@
                 <div class="config-test-row">
                   <button id="cfgVisionTest" class="config-test-btn">测试连接</button>
                   <span id="cfgVisionTestResult" class="config-test-result hidden"></span>
+                
+                  
+                
+                  <button id="cfgVisionSave" class="config-save-btn">保存视觉配置</button>
                 </div>
+                <div id="cfgVisionPresets" class="config-presets hidden"></div>
+              
+                
               </div>
               <div class="config-group">
                 <h4 class="config-group-title">音频/台词模型</h4>
@@ -154,15 +162,16 @@
                 <div class="config-test-row">
                   <button id="cfgAudioTest" class="config-test-btn">测试连接</button>
                   <span id="cfgAudioTestResult" class="config-test-result hidden"></span>
+                
+                  
+                
+                  <button id="cfgAudioSave" class="config-save-btn">保存音频配置</button>
                 </div>
+                <div id="cfgAudioPresets" class="config-presets hidden"></div>
+              
+                
+              </div>
             </div>
-            <div class="config-actions">
-              <button id="configSaveBtn" class="browse-btn">保存并应用</button>
-              <button id="configSyncFromServer" class="tb-btn" style="margin-left:8px">从服务端同步</button>
-              <span id="configStatus" class="config-status"></span>
-            </div>
-            <div id="configPresets" class="config-presets hidden"></div>
-          </div>
         </div>
       </div>
     </section>
@@ -246,6 +255,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=2"></script>
+  <script src="/js/app.js?v=6"></script>
 </body>
 </html>
