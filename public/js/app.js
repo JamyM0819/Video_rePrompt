@@ -235,6 +235,7 @@
     btn.textContent = '保存中...';
     try {
       savePreset(type);
+      saveConfigToLocal();
       const payload = buildConfigPayload();
       const res = await fetch('/api/config', {
         method: 'POST',
@@ -472,50 +473,65 @@
     );
   });
 
-  // Load config from localStorage first (fast), then upgrade from server
+  // Load config from localStorage first (fast), then fill blanks from server
   loadConfigFromLocal();
 
-  // Pull presets from server (cross-browser), merge into localStorage
+  // Full async init: server config → fill blanks → presets → snapshots
   (async () => {
-    // Load presets from server first
+    // 1. Pull active config from server to fill any blank fields
+    try {
+      const serverCfg = await fetch('/api/config').then(r => r.json());
+      Object.keys(cfgFields).forEach(k => {
+        if (!cfgFields[k].value && serverCfg[k] && serverCfg[k] !== '***') {
+          cfgFields[k].value = serverCfg[k];
+        }
+      });
+      // Provider select: if server has a known provider, set it
+      if (serverCfg.VISION_PROVIDER && VISION_PRESETS[serverCfg.VISION_PROVIDER]) {
+        cfgFields.VISION_PROVIDER.value = serverCfg.VISION_PROVIDER;
+        const preset = VISION_PRESETS[serverCfg.VISION_PROVIDER];
+        if (!cfgFields.VISION_BASE_URL.value) cfgFields.VISION_BASE_URL.value = preset.baseUrl || '';
+        if (!cfgFields.VISION_MODEL.value) cfgFields.VISION_MODEL.value = preset.model || '';
+        cfgCustomVision.classList.add('hidden');
+      }
+      if (serverCfg.AUDIO_PROVIDER && AUDIO_PRESETS[serverCfg.AUDIO_PROVIDER]) {
+        cfgFields.AUDIO_PROVIDER.value = serverCfg.AUDIO_PROVIDER;
+        const preset = AUDIO_PRESETS[serverCfg.AUDIO_PROVIDER];
+        if (!cfgFields.AUDIO_BASE_URL.value) cfgFields.AUDIO_BASE_URL.value = preset.baseUrl || '';
+        if (!cfgFields.AUDIO_MODEL.value) cfgFields.AUDIO_MODEL.value = preset.model || '';
+        cfgCustomAudio.classList.add('hidden');
+      }
+      saveConfigToLocal();
+    } catch { /* server not ready */ }
+
+    // 2. Load presets from server
     await loadPresetsFromServer();
 
-    // Take initial snapshots after all loading is done
-    setTimeout(() => { visionSnapshot = fieldSnap('VISION'); audioSnapshot = fieldSnap('AUDIO'); refreshBtns(); }, 500);
-
-    // If still no presets locally, auto-create from active server config
+    // 3. If still no presets, auto-create from current form values
     if (getPresets('VISION').length === 0 || getPresets('AUDIO').length === 0) {
       try {
-        const cfg = await fetch('/api/config').then(r => r.json());
-        // Create vision preset from server state
-        if (cfg.VISION_PROVIDER && getPresets('VISION').length === 0) {
-          const p = { PROVIDER: cfg.VISION_PROVIDER, BASE_URL: cfg.VISION_BASE_URL||'', API_KEY: '', MODEL: cfg.VISION_MODEL||'', CONCURRENCY: cfg.VISION_CONCURRENCY||'3', MAX_TOKENS: cfg.VISION_MAX_TOKENS||'1024', _l: (cfg.VISION_PROVIDER||'?').slice(0,12)+'/'+(cfg.VISION_MODEL||'').slice(0,20), _t: Date.now() };
+        if (getPresets('VISION').length === 0) {
+          const p = buildPreset('VISION');
+          p._l = (p.PROVIDER||'?').slice(0,12)+'/'+(p.MODEL||'').slice(0,20);
+          p._t = Date.now();
           setPresets('VISION', [p]);
         }
-        // Create audio preset from server state
-        if (cfg.AUDIO_PROVIDER && getPresets('AUDIO').length === 0) {
-          const p = { PROVIDER: cfg.AUDIO_PROVIDER, BASE_URL: cfg.AUDIO_BASE_URL||'', API_KEY: '', MODEL: cfg.AUDIO_MODEL||'', CONCURRENCY: cfg.AUDIO_CONCURRENCY||'1', _l: (cfg.AUDIO_PROVIDER||'?').slice(0,12)+'/'+(cfg.AUDIO_MODEL||'').slice(0,20), _t: Date.now() };
+        if (getPresets('AUDIO').length === 0) {
+          const p = buildPreset('AUDIO');
+          p._l = (p.PROVIDER||'?').slice(0,12)+'/'+(p.MODEL||'').slice(0,20);
+          p._t = Date.now();
           setPresets('AUDIO', [p]);
         }
         await savePresetsToServer();
-        renderPresets('VISION');
-        renderPresets('AUDIO');
       } catch {}
     }
-  })();
+    renderPresets('VISION');
+    renderPresets('AUDIO');
 
-  // On startup, sync non-sensitive fields to server (API keys already on disk)
-  (async () => {
-    const saved = JSON.parse(localStorage.getItem('appConfig') || '{}');
-    if (!saved.VISION_PROVIDER && !saved.AUDIO_PROVIDER) return;
-    try {
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildConfigPayload()),
-      });
-      console.log('[config] Synced non-sensitive fields to server');
-    } catch { /* server not ready */ }
+    // 4. Take initial snapshots for dirty tracking AFTER all loading
+    visionSnapshot = fieldSnap('VISION');
+    audioSnapshot = fieldSnap('AUDIO');
+    refreshBtns();
   })();
 
   // ── Version display ──
