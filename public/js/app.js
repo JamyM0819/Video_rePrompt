@@ -571,11 +571,11 @@
     } else {
       progressSection.classList.remove('hidden');
       startDetectAnim();
-      setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+      setToolbar([{text:'返回首页',onClick:resetToUpload}]);
       pollJob(savedJobId);
     }
   } else {
-    setToolbar([{type:'history'}]);
+    setToolbar([]);
     renderRecentAnalyses();
     renderPromptHistory();
   }
@@ -1024,7 +1024,7 @@
     }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
-      setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+      setToolbar([{text:'返回首页',onClick:resetToUpload}]);
       progressLog.innerHTML = '';
       pollJob(currentJobId);
     }).catch(e => showError(e.message));
@@ -1045,71 +1045,14 @@
     localStorage.setItem('jobHistory', JSON.stringify(h));
     deleteRecent(jobId);
   }
-  function loadJobList() {
-    return fetch('/api/jobs').then(r => r.json()).catch(() => []);
-  }
-
   function setToolbar(buttons) {
     headerToolbar.innerHTML = '';
     buttons.forEach(def => {
-      if (def.type === 'history') {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:relative';
-        const btn = document.createElement('button');
-        btn.textContent = '📋 历史';
-        btn.className = 'tb-btn';
-        const dropdown = document.createElement('div');
-        dropdown.style.cssText = 'position:absolute;top:100%;right:0;margin-top:4px;min-width:280px;max-width:360px;background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;padding:4px 0;z-index:100;display:none;max-height:360px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
-
-        const buildDropdown = async () => {
-          dropdown.innerHTML = '<div style="padding:10px 14px;color:#8b8fa7;font-size:0.78rem">加载中...</div>';
-          const jobs = await loadJobList();
-          if (jobs.length === 0) {
-            dropdown.innerHTML = '<div style="padding:10px 14px;color:#8b8fa7;font-size:0.8rem">暂无历史记录</div>';
-            return;
-          }
-          const statusMap = {done:'✅',awaiting_range:'⏸',detecting_scenes:'🔍',extracting:'📸',extracting_frames:'📸',extracting_thumbs:'📸',analyzing:'🤖',downloading:'⬇',error:'❌',received:'📥'};
-          dropdown.innerHTML = '';
-          jobs.forEach(job => {
-            const isCurrent = job.jobId === currentJobId;
-            const icon = statusMap[job.status] || '⏳';
-            const name = job.videoName || job.jobId.slice(0,8);
-            const summary = job.shotRange ? ' (' + job.shotRange + ')' : job.totalShots ? ' (' + job.totalShots + '镜头)' : '';
-            const row = document.createElement('div');
-            row.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:0.8rem';
-            if (isCurrent) row.style.background = 'rgba(74,108,247,0.1)';
-            const left = document.createElement('div');
-            left.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4e6f0';
-            left.textContent = (isCurrent ? '● ' : '') + icon + ' ' + name + summary;
-            const del = document.createElement('button');
-            del.textContent = '✕';
-            del.style.cssText = 'background:none;border:none;color:#8b8fa7;cursor:pointer;font-size:0.9rem;padding:0 4px;flex-shrink:0';
-            del.title = '删除此记录';
-            del.addEventListener('click', (e) => { e.stopPropagation(); removeFromHistory(job.jobId); buildDropdown(); });
-            row.addEventListener('mouseenter', () => { if (!isCurrent) row.style.background = '#242734'; });
-            row.addEventListener('mouseleave', () => { if (!isCurrent) row.style.background = ''; });
-            row.addEventListener('click', () => { dropdown.style.display = 'none'; if (job.jobId === currentJobId) return; switchToJob(job.jobId); });
-            row.appendChild(left); row.appendChild(del);
-            dropdown.appendChild(row);
-          });
-        };
-
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
-          buildDropdown();
-          dropdown.style.display = 'block';
-        });
-        document.addEventListener('click', () => { dropdown.style.display = 'none'; });
-        wrap.appendChild(btn); wrap.appendChild(dropdown);
-        headerToolbar.appendChild(wrap);
-      } else {
-        const btn = document.createElement('button');
-        btn.textContent = def.text;
-        btn.className = 'tb-btn' + (def.primary ? ' primary' : '');
-        btn.addEventListener('click', def.onClick);
-        headerToolbar.appendChild(btn);
-      }
+      const btn = document.createElement('button');
+      btn.textContent = def.text;
+      btn.className = 'tb-btn' + (def.primary ? ' primary' : '');
+      btn.addEventListener('click', def.onClick);
+      headerToolbar.appendChild(btn);
     });
   }
 
@@ -1129,7 +1072,7 @@
         progressSection.classList.add('hidden');
         errorSection.classList.remove('hidden');
         errorMessage.textContent = '该任务已在服务端过期，无法恢复。请重新上传视频分析。';
-        setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+        setToolbar([{text:'返回首页',onClick:resetToUpload}]);
         return;
       }
       const job = await res.json();
@@ -1146,7 +1089,7 @@
         showError(job.error || '处理失败');
       } else {
         saveSession(jobId, job.status);
-        setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+        setToolbar([{text:'返回首页',onClick:resetToUpload}]);
         startDetectAnim();
         pollJob(jobId);
       }
@@ -1179,7 +1122,7 @@
     });
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { const d = JSON.parse(xhr.responseText); saveSession(d.jobId, 'received'); addToHistory(d.jobId); setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]); startDetectAnim(); pollJob(d.jobId); } catch { showError('解析响应失败'); }
+        try { const d = JSON.parse(xhr.responseText); saveSession(d.jobId, 'received'); addToHistory(d.jobId); setToolbar([{text:'返回首页',onClick:resetToUpload}]); startDetectAnim(); pollJob(d.jobId); } catch { showError('解析响应失败'); }
       } else {
         try { showError(JSON.parse(xhr.responseText).error || '上传失败 (HTTP ' + xhr.status + ')'); } catch { showError('上传失败 (HTTP ' + xhr.status + ')'); }
       }
@@ -1316,7 +1259,7 @@
     updateRangeFill();
     rangeSection.classList.remove('hidden');
     rangeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const btns = [{type:'history'},{text:'返回首页',onClick:resetToUpload}];
+    const btns = [{text:'返回首页',onClick:resetToUpload}];
     if (cameFromResults) btns.splice(1, 0, {text:'← 返回结果',primary:true,onClick:backToResults});
     setToolbar(btns);
   }
@@ -1379,7 +1322,7 @@
       shotsTimeline.appendChild(card);
     });
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setToolbar([{type:'history'},{text:'分析其他镜头',onClick:backToRange},{text:'分析新视频',primary:true,onClick:resetToUpload}]);
+    setToolbar([{text:'分析其他镜头',onClick:backToRange},{text:'分析新视频',primary:true,onClick:resetToUpload}]);
     if (r) saveRecent(job.jobId, r.videoFile || '未知', r.totalShots);
   }
 
@@ -1393,7 +1336,7 @@
       testImg.onerror = () => {
         progressSection.classList.remove('hidden');
         setProgress(0, '抽取缩略图...', '');
-        setToolbar([{type:'history'},{text:'返回首页',onClick:resetToUpload}]);
+        setToolbar([{text:'返回首页',onClick:resetToUpload}]);
         fetch('/api/re-extract-frames/' + currentJobId, { method: 'POST' })
           .then(r => r.json()).then(data => {
             if (data.error) { showError(data.error); return; }
