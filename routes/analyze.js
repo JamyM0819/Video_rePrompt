@@ -600,7 +600,8 @@ router.post('/clear-cache', (req, res) => {
 
 // Version info
 router.get('/version', (req, res) => {
-  res.json({ version: '1.0.0', hash: getGitHash() });
+  const pkg = require('../package.json');
+  res.json({ version: pkg.version, hash: getGitHash() });
 });
 
 // Batch delete saved jobs — full cleanup (uploads + outputs + memory)

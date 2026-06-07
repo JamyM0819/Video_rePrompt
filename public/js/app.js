@@ -173,13 +173,18 @@
 
   configToggle.addEventListener('click', () => {
     configBody.classList.toggle('hidden');
-    // Take current snapshots when opening panel
     if (!configBody.classList.contains('hidden')) {
       visionSnapshot = fieldSnap('VISION');
       audioSnapshot = fieldSnap('AUDIO');
       refreshBtns();
+      configToggle.textContent = '⚙ 收起配置';
+    } else {
+      configToggle.textContent = '⚙ 接口配置';
     }
   });
+
+  // Initial state — panel starts expanded
+  configToggle.textContent = '⚙ 收起配置';
 
   // ── Per-panel save + dirty tracking ──
   const VISION_FIELD_KEYS = ['VISION_PROVIDER', 'VISION_BASE_URL', 'VISION_API_KEY', 'VISION_MODEL', 'VISION_CONCURRENCY', 'VISION_MAX_TOKENS'];
