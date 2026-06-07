@@ -598,9 +598,9 @@ router.post('/clear-cache', (req, res) => {
   res.json({ ok: true, results });
 });
 
-// Version info
+// Version info — reads file fresh each request, no caching
 router.get('/version', (req, res) => {
-  const pkg = require('../package.json');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
   res.json({ version: pkg.version, hash: getGitHash() });
 });
 
