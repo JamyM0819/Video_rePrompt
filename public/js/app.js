@@ -900,6 +900,7 @@
   function clearSession() {
     sessionStorage.removeItem('jobId');
     sessionStorage.removeItem('jobStatus');
+    sessionStorage.removeItem('jobStartTime');
     currentJobId = null;
     currentJobStatus = null;
   }
@@ -1122,7 +1123,7 @@
     });
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { const d = JSON.parse(xhr.responseText); saveSession(d.jobId, 'received'); addToHistory(d.jobId); setToolbar([{text:'返回首页',onClick:resetToUpload}]); startDetectAnim(); pollJob(d.jobId); } catch { showError('解析响应失败'); }
+        try { const d = JSON.parse(xhr.responseText); saveSession(d.jobId, 'received'); addToHistory(d.jobId); setToolbar([{text:'返回首页',onClick:resetToUpload}]); sessionStorage.removeItem('jobStartTime'); startDetectAnim(); pollJob(d.jobId); } catch { showError('解析响应失败'); }
       } else {
         try { showError(JSON.parse(xhr.responseText).error || '上传失败 (HTTP ' + xhr.status + ')'); } catch { showError('上传失败 (HTTP ' + xhr.status + ')'); }
       }
@@ -1151,7 +1152,7 @@
       const res = await fetch('/api/analyze-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '请求失败 (HTTP ' + res.status + ')'); }
       const { jobId } = await res.json();
-      saveSession(jobId, 'downloading'); startDetectAnim(); pollJob(jobId);
+      saveSession(jobId, 'downloading'); sessionStorage.removeItem('jobStartTime'); startDetectAnim(); pollJob(jobId);
     } catch (e) { showError(e.message); urlSubmitBtn.disabled = false; urlSubmitBtn.classList.remove('btn-loading'); }
   }
 
@@ -1223,7 +1224,12 @@
   function startDetectAnim() {
     stopDetectAnim();
     progressBar.classList.add('breathing');
-    let tick = 0; const start = Date.now();
+    // Use session-stored job start time so elapsed doesn't reset on navigation
+    const start = Number(sessionStorage.getItem('jobStartTime')) || Date.now();
+    if (!sessionStorage.getItem('jobStartTime')) {
+      sessionStorage.setItem('jobStartTime', start);
+    }
+    let tick = Math.max(0, Math.floor((Date.now() - start) / 300));
     progressAnimTimer = setInterval(() => {
       tick++;
       const elapsed = Math.floor((Date.now() - start) / 1000);
