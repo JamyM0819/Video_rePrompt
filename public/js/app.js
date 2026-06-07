@@ -917,10 +917,24 @@
   });
 
   // ── Drag & drop ──
-  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('drag-over'); });
+  let dragCounter = 0;
+  dropZone.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragCounter++;
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      dropZone.classList.remove('drag-over');
+    }
+  });
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
   dropZone.addEventListener('drop', (e) => {
-    e.preventDefault(); dropZone.classList.remove('drag-over');
+    e.preventDefault();
+    dragCounter = 0;
+    dropZone.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   });
