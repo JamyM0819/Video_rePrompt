@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=25">
+  <link rel="stylesheet" href="/css/style.css?v=26">
 </head>
 <body>
   <div class="app">
@@ -142,6 +142,16 @@
                   <button id="cfgVisionSave" class="config-save-btn">保存视觉配置</button>
                 </div>
                 <div id="cfgVisionPresets" class="config-presets hidden"></div>
+                <div class="config-api-guide">
+                  <details><summary class="config-api-guide-summary">阿里云 API Key 获取指南</summary>
+                    <ol class="config-api-guide-steps">
+                      <li>打开 <a href="https://dashscope.console.aliyun.com/overview" target="_blank" rel="noopener">阿里云百炼控制台</a> 并登录</li>
+                      <li>左侧菜单 → 模型广场 → 找到 <b>qwen-vl-max</b> 或 <b>qwen3-asr-flash</b></li>
+                      <li>点击右上角头像 → <b>API-KEY 管理</b> → 创建新的 API Key</li>
+                      <li>将生成的 Key 填入上方 <b>API Key</b> 输入框，点击 <b>保存</b> 即可</li>
+                    </ol>
+                  </details>
+                </div>
               
                 
               </div>
@@ -169,6 +179,16 @@
                   <button id="cfgAudioSave" class="config-save-btn">保存音频配置</button>
                 </div>
                 <div id="cfgAudioPresets" class="config-presets hidden"></div>
+                <div class="config-api-guide">
+                  <details><summary class="config-api-guide-summary">阿里云 API Key 获取指南</summary>
+                    <ol class="config-api-guide-steps">
+                      <li>打开 <a href="https://dashscope.console.aliyun.com/overview" target="_blank" rel="noopener">阿里云百炼控制台</a> 并登录</li>
+                      <li>左侧菜单 → 模型广场 → 找到 <b>qwen-vl-max</b> 或 <b>qwen3-asr-flash</b></li>
+                      <li>点击右上角头像 → <b>API-KEY 管理</b> → 创建新的 API Key</li>
+                      <li>将生成的 Key 填入上方 <b>API Key</b> 输入框，点击 <b>保存</b> 即可</li>
+                    </ol>
+                  </details>
+                </div>
               
                 
               </div>
@@ -279,6 +299,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=25"></script>
+  <script src="/js/app.js?v=26"></script>
 </body>
 </html>
