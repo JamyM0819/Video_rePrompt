@@ -3,6 +3,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const config = require('../utils/config');
+const logger = require('../utils/logger');
 const overrides = require('../utils/overrides');
 
 // Resolve config value: override takes precedence over default
@@ -21,13 +22,13 @@ async function describeFrame(framePath, customPrompt) {
   try {
     return await callVisionAPI(framePath, prompt);
   } catch (err) {
-    console.error(`[vision] Failed:`, err.message);
+    logger.error(`[vision] Failed:`, err.message);
     // Retry once
     try {
       await new Promise(r => setTimeout(r, 2000));
       return await callVisionAPI(framePath, prompt);
     } catch (retryErr) {
-      console.error(`[vision] Retry also failed:`, retryErr.message);
+      logger.error(`[vision] Retry also failed:`, retryErr.message);
       return `[分析失败: ${retryErr.message}]`;
     }
   }
@@ -105,22 +106,28 @@ function encodeImage(filePath) {
 /**
  * Describe a shot using 3 frames (start, middle, end) to capture temporal changes.
  */
-async function describeShot(frames, customPrompt) {
+async function describeShot(frames, durationSec, customPrompt) {
   if (frames.length === 1) return describeFrame(frames[0], customPrompt);
 
   let prompt = config.VISION_PROMPT;
-  prompt += '\n\n以上是同一个镜头的3张截图，按时间顺序排列[start → middle → end]。请描述这个镜头的完整动态过程：人物的动作变化、情绪变化、镜头运动、以及任何画面的连续转变。不要分开描述每张图，而是作为一个连续的时间段来描述。';
+  const hasDur = durationSec != null && durationSec > 0;
+  const durHint = hasDur
+    ? (durationSec < 1.0
+      ? `注意：这是一个极短的镜头，仅持续 ${durationSec.toFixed(1)} 秒，所有动作都是瞬间发生的快动作，不要描述成缓慢变化。`
+      : `该镜头持续 ${durationSec.toFixed(1)} 秒，请按真实时间节奏描述。`)
+    : '';
+  prompt += `\n\n${durHint}\n请描述这个镜头的完整动态过程。主体动作变化必须描述；若画面中可清楚看到人物面部表情或身体姿态传递出明显情绪，则描述情绪变化；镜头运动若有则描写。不要逐帧列举，当作连续的时间段来描述。`;
   if (customPrompt) prompt += '\n\n【附加要求】' + customPrompt;
 
   try {
     return await callVisionMultiAPI(frames, prompt);
   } catch (err) {
-    console.error(`[vision] Multi-frame failed:`, err.message);
+    logger.error(`[vision] Multi-frame failed:`, err.message);
     try {
       await new Promise(r => setTimeout(r, 2000));
       return await callVisionMultiAPI(frames, prompt);
     } catch (retryErr) {
-      console.error(`[vision] Multi-frame retry also failed:`, retryErr.message);
+      logger.error(`[vision] Multi-frame retry also failed:`, retryErr.message);
       return `[分析失败: ${retryErr.message}]`;
     }
   }
@@ -167,10 +174,10 @@ function callVisionMultiAPI(framePaths, prompt) {
   });
 }
 const VIDEO_PROMPT = [
-  '这是一个完整镜头的视频片段。请描述：',
-  '- 人物的动作变化过程（从什么变成什么）',
-  '- 情绪变化过程',
-  '- 镜头是否在运动（如果有，推拉摇移跟？）',
+  '请描述这个连续镜头：',
+  '- 人物的动作变化过程（从什么变成什么）——必须描述',
+  '- 情绪变化过程——仅当可清楚看到面部表情或身体情绪信号时才写，否则跳过',
+  '- 镜头是否在运动（若有，推拉摇移跟？）',
   '- 该镜头在讲述什么情节',
   '请当作一个连续的时间段来描述，不要逐帧列举。',
 ].join('\n');
@@ -178,25 +185,30 @@ const VIDEO_PROMPT = [
 /**
  * Describe a shot using video clip mode (video_url).
  */
-async function describeVideoClip(clipPath, customPrompt) {
+async function describeVideoClip(clipPath, durationSec, customPrompt) {
   let prompt = VIDEO_PROMPT;
   if (customPrompt) prompt += '\n\n【附加要求】' + customPrompt;
 
+  // Qwen VL requires at least 4 frames at default fps=2, so ceil(dur×fps) ≥ 4.
+  // For short clips, boost fps to guarantee enough frames.
+  const minFps = durationSec > 0 ? Math.ceil(4 / durationSec) : 4;
+  const fps = Math.max(2, minFps);
+
   try {
-    return await callVideoAPI(clipPath, prompt);
+    return await callVideoAPI(clipPath, prompt, fps);
   } catch (err) {
-    console.error(`[vision-video] Failed:`, err.message);
+    logger.error(`[vision-video] Failed:`, err.message);
     try {
       await new Promise(r => setTimeout(r, 2000));
-      return await callVideoAPI(clipPath, prompt);
+      return await callVideoAPI(clipPath, prompt, fps);
     } catch (retryErr) {
-      console.error(`[vision-video] Retry also failed:`, retryErr.message);
+      logger.error(`[vision-video] Retry also failed:`, retryErr.message);
       return `[视频分析失败: ${retryErr.message}]`;
     }
   }
 }
 
-function callVideoAPI(clipPath, prompt) {
+function callVideoAPI(clipPath, prompt, fps = 2) {
   return new Promise((resolve, reject) => {
     const resolved = path.resolve(clipPath);
     const ext = path.extname(resolved).toLowerCase().replace('.', '');
@@ -205,14 +217,14 @@ function callVideoAPI(clipPath, prompt) {
     const data = fs.readFileSync(resolved);
     const videoUrl = `data:video/${mime};base64,${data.toString('base64')}`;
 
-    console.log(`[vision-video] Sending clip: ${path.basename(clipPath)} (${(data.length/1024/1024).toFixed(1)}MB)`);
+    logger.info(`[vision-video] Sending clip: ${path.basename(clipPath)} (${(data.length/1024/1024).toFixed(1)}MB, fps=${fps})`);
 
     const payload = JSON.stringify({
       model: cfg('VISION_MODEL'),
       messages: [{
         role: 'user',
         content: [
-          { type: 'video_url', video_url: { url: videoUrl } },
+          { type: 'video_url', video_url: { url: videoUrl, fps } },
           { type: 'text', text: prompt },
         ],
       }],
@@ -248,20 +260,21 @@ function callVideoAPI(clipPath, prompt) {
 
 /**
  * Describe all shots in video mode.
+ * clipData is [{ path, duration }, ...]
  */
-async function describeAllVideoClips(clipPaths, onProgress, customPrompt) {
-  const results = new Array(clipPaths.length);
+async function describeAllVideoClips(clipData, onProgress, customPrompt) {
+  const results = new Array(clipData.length);
   let done = 0;
 
-  console.log(`[vision-video] Starting ${clipPaths.length} video clips...`);
+  logger.info(`[vision-video] Starting ${clipData.length} video clips...`);
 
   const workers = [];
-  for (let i = 0; i < clipPaths.length; i++) {
+  for (let i = 0; i < clipData.length; i++) {
     workers.push((async (idx) => {
-      results[idx] = await describeVideoClip(clipPaths[idx], customPrompt);
+      results[idx] = await describeVideoClip(clipData[idx].path, clipData[idx].duration, customPrompt);
       done++;
-      console.log(`[vision-video] Clip ${idx + 1}/${clipPaths.length}: done (${results[idx].length} chars)`);
-      if (onProgress) onProgress(done - 1);
+      logger.info(`[vision-video] Clip ${idx + 1}/${clipData.length}: done (${results[idx].length} chars)`);
+      if (onProgress) onProgress(done);
     })(i));
   }
   await Promise.all(workers);
@@ -277,8 +290,8 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
   let next = 0;
   let done = 0;
 
-  console.log(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
-  console.log(`[vision] Starting ${framePaths.length} frames (concurrency=${concurrency})...`);
+  logger.info(`[vision] Active: ${cfg('VISION_PROVIDER')}/${cfg('VISION_MODEL')} @ ${cfg('VISION_BASE_URL')}`);
+  logger.info(`[vision] Starting ${framePaths.length} frames (concurrency=${concurrency})...`);
 
   const worker = async () => {
     while (next < framePaths.length) {
@@ -288,7 +301,7 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
       timings[i] = Date.now() - t0;
       completedAt[i] = Date.now();
       done++;
-      console.log(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars, ${timings[i]}ms)`);
+      logger.info(`[vision] Frame ${i + 1}/${framePaths.length}: done (${results[i].length} chars, ${timings[i]}ms)`);
       if (onProgress) onProgress(done - 1);
     }
   };
@@ -298,4 +311,31 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
   return { results, timings, completedAt };
 }
 
-module.exports = { describeFrame, describeAllFrames, describeAllVideoClips };
+/**
+ * Batch version of describeShot with concurrency.
+ * shotData is [{ frames: [path, ...], duration: number }, ...]
+ */
+async function describeAllShots(shotData, onProgress, customPrompt) {
+  const concurrency = parseInt(cfg('VISION_CONCURRENCY')) || 5;
+  const results = new Array(shotData.length);
+  let done = 0;
+  let next = 0;
+
+  logger.info(`[vision] Starting ${shotData.length} shots (multi-frame, concurrency=${concurrency})...`);
+
+  const worker = async () => {
+    while (next < shotData.length) {
+      const i = next++;
+      const sd = shotData[i];
+      results[i] = await describeShot(sd.frames, sd.duration, customPrompt);
+      done++;
+      logger.info(`[vision] Shot ${i + 1}/${shotData.length}: done (${results[i].length} chars)`);
+      if (onProgress) onProgress(done);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, shotData.length) }, () => worker()));
+  return results;
+}
+
+module.exports = { describeFrame, describeAllFrames, describeShot, describeAllShots, describeVideoClip, describeAllVideoClips };

@@ -1,0 +1,97 @@
+[2026-06-17 18:55:08.338] [ERROR] [pipeline] runRange failed: allFramePaths is not defined
+[2026-06-17 18:55:49.670] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 18:55:49.670] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 18:55:49.674] [INFO] Reloaded 10 saved jobs from disk
+[2026-06-17 18:55:49.676] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 18:56:19.013] [INFO] [vision] Starting 1 shots (multi-frame, concurrency=5)...
+[2026-06-17 18:56:40.481] [INFO] [vision] Shot 1/1: done (1126 chars)
+[2026-06-17 18:56:40.739] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 18:56:40.739] [INFO] [audioDescribe] Transcribing 1 segments (concurrency=3)...
+[2026-06-17 18:56:41.071] [INFO] [audioDescribe] Segment 1/1: done (332ms)
+[2026-06-17 18:56:41.071] [INFO] [audioDescribe] Done: 1 segments
+[2026-06-17 19:00:20.221] [INFO] [vision] Starting 1 shots (multi-frame, concurrency=5)...
+[2026-06-17 19:00:34.573] [INFO] [vision] Shot 1/1: done (776 chars)
+[2026-06-17 19:00:34.902] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 19:00:34.902] [INFO] [audioDescribe] Transcribing 1 segments (concurrency=3)...
+[2026-06-17 19:00:35.231] [INFO] [audioDescribe] Segment 1/1: done (329ms)
+[2026-06-17 19:00:35.231] [INFO] [audioDescribe] Done: 1 segments
+[2026-06-17 19:10:13.215] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:10:13.215] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:10:13.217] [INFO] Reloaded 12 saved jobs from disk
+[2026-06-17 19:10:13.219] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:27:23.719] [INFO] [vision-video] Sending clip: clip_0.mp4 (0.1MB, fps=6)
+[2026-06-17 19:27:24.096] [ERROR] [vision-video] Failed: Video API 400: {"error":{"message":"<400> InternalError.Algo.InvalidParameter: The video modality input does not meet the requirements because: The video file is too short.","type":"invalid_request_error","param":null,"code":"invalid_parameter_error"},"id":"chatcmpl-0bd3893b-d958-9f69-ab9e-a6b21fa31f48","request_i
+[2026-06-17 19:27:26.099] [INFO] [vision-video] Sending clip: clip_0.mp4 (0.1MB, fps=6)
+[2026-06-17 19:27:26.756] [ERROR] [vision-video] Retry also failed: Video API 400: {"error":{"message":"<400> InternalError.Algo.InvalidParameter: The video modality input does not meet the requirements because: The video file is too short.","type":"invalid_request_error","param":null,"code":"invalid_parameter_error"},"id":"chatcmpl-9db98d3a-266e-9ae6-9274-4664028daf0f","request_i
+[2026-06-17 19:28:07.588] [INFO] [vision-video] Sending clip: clip_padded.mp4 (0.1MB, fps=2)
+[2026-06-17 19:28:36.572] [INFO] [vision-video] Sending clip: clip_2s.mp4 (0.1MB, fps=2)
+[2026-06-17 19:29:54.974] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:29:54.974] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:29:54.977] [INFO] Reloaded 12 saved jobs from disk
+[2026-06-17 19:29:54.979] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:31:32.918] [INFO] [videoClip] clip_4.mp4: 0.2MB (2.0s)
+[2026-06-17 19:31:32.919] [INFO] [vision-video] Starting 1 video clips...
+[2026-06-17 19:31:32.919] [INFO] [vision-video] Sending clip: clip_4.mp4 (0.2MB, fps=7)
+[2026-06-17 19:31:49.091] [INFO] [vision-video] Clip 1/1: done (771 chars)
+[2026-06-17 19:31:49.426] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 19:31:49.426] [INFO] [audioDescribe] Transcribing 1 segments (concurrency=3)...
+[2026-06-17 19:31:49.880] [INFO] [audioDescribe] Segment 1/1: done (454ms)
+[2026-06-17 19:31:49.880] [INFO] [audioDescribe] Done: 1 segments
+[2026-06-17 19:36:29.265] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:36:29.265] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:36:29.268] [INFO] Reloaded 13 saved jobs from disk
+[2026-06-17 19:36:29.271] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:38:17.329] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:38:17.329] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:38:17.334] [INFO] Reloaded 13 saved jobs from disk
+[2026-06-17 19:38:17.336] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:39:44.849] [INFO] [vision] Starting 1 shots (multi-frame, concurrency=5)...
+[2026-06-17 19:39:59.857] [INFO] [vision] Shot 1/1: done (830 chars)
+[2026-06-17 19:40:00.202] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 19:40:00.202] [INFO] [audioDescribe] Transcribing 1 segments (concurrency=3)...
+[2026-06-17 19:40:00.457] [INFO] [audioDescribe] Segment 1/1: done (255ms)
+[2026-06-17 19:40:00.457] [INFO] [audioDescribe] Done: 1 segments
+[2026-06-17 19:46:16.733] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:46:16.733] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:46:16.735] [INFO] Reloaded 14 saved jobs from disk
+[2026-06-17 19:46:16.737] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:53:40.024] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 19:53:40.024] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 19:53:40.026] [INFO] Reloaded 14 saved jobs from disk
+[2026-06-17 19:53:40.028] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 19:56:05.056] [INFO] [vision] Starting 5 shots (multi-frame, concurrency=5)...
+[2026-06-17 19:56:16.403] [INFO] [vision] Shot 4/5: done (704 chars)
+[2026-06-17 19:56:16.596] [INFO] [vision] Shot 1/5: done (636 chars)
+[2026-06-17 19:56:19.718] [INFO] [vision] Shot 2/5: done (686 chars)
+[2026-06-17 19:56:21.552] [INFO] [vision] Shot 5/5: done (835 chars)
+[2026-06-17 19:56:26.017] [INFO] [vision] Shot 3/5: done (1012 chars)
+[2026-06-17 19:56:26.709] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 19:56:26.709] [INFO] [audioDescribe] Transcribing 5 segments (concurrency=3)...
+[2026-06-17 19:56:27.038] [INFO] [audioDescribe] Segment 1/5: done (328ms)
+[2026-06-17 19:56:27.154] [INFO] [audioDescribe] Segment 2/5: done (444ms)
+[2026-06-17 19:56:27.199] [INFO] [audioDescribe] Segment 3/5: done (488ms)
+[2026-06-17 19:56:27.330] [INFO] [audioDescribe] Segment 4/5: done (292ms)
+[2026-06-17 19:56:27.452] [INFO] [audioDescribe] Segment 5/5: done (298ms)
+[2026-06-17 19:56:27.452] [INFO] [audioDescribe] Done: 5 segments
+[2026-06-17 20:00:13.384] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 20:00:13.384] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 20:00:13.387] [INFO] Reloaded 15 saved jobs from disk
+[2026-06-17 20:00:13.389] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 20:02:27.995] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 20:02:27.995] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 20:02:27.999] [INFO] Reloaded 15 saved jobs from disk
+[2026-06-17 20:02:28.001] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 20:04:28.297] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 20:04:28.298] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 20:04:28.300] [INFO] Reloaded 15 saved jobs from disk
+[2026-06-17 20:04:28.302] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 20:07:50.348] [INFO] [config] 前端覆盖生效: VISION_PROVIDER, VISION_BASE_URL, VISION_MODEL, AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY
+[2026-06-17 20:07:50.348] [INFO] Dependency checks: ffmpeg: OK, ffprobe: OK, scenedetect: OK, 视觉[前端]: dashscope/qwen-vl-max, 音频[前端]: dashscope/qwen3-asr-flash
+[2026-06-17 20:07:50.351] [INFO] Reloaded 15 saved jobs from disk
+[2026-06-17 20:07:50.352] [INFO] Video rePrompt server running at http://localhost:3000
+[2026-06-17 20:08:10.980] [INFO] [vision] Starting 1 shots (multi-frame, concurrency=5)...
+[2026-06-17 20:08:24.209] [INFO] [vision] Shot 1/1: done (703 chars)
+[2026-06-17 20:08:24.478] [INFO] [audioDescribe] Active: dashscope/qwen3-asr-flash @ https://dashscope.aliyuncs.com
+[2026-06-17 20:08:24.478] [INFO] [audioDescribe] Transcribing 1 segments (concurrency=3)...
+[2026-06-17 20:08:24.823] [INFO] [audioDescribe] Segment 1/1: done (345ms)
+[2026-06-17 20:08:24.823] [INFO] [audioDescribe] Done: 1 segments

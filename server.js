@@ -3,6 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { router, jobStore, loadSavedJobs } = require('./routes/analyze');
 const config = require('./utils/config');
+const logger = require('./utils/logger');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -34,7 +35,7 @@ app.use((err, req, res, next) => {
   if (err.message && err.message.includes('Unsupported')) {
     return res.status(400).json({ error: err.message });
   }
-  console.error('[server] Error:', err.message || err);
+  logger.error('[server] Error:', err);
   res.status(500).json({ error: '服务器内部错误，请重试' });
 });
 
@@ -51,7 +52,7 @@ async function checkDependencies() {
     });
     checks.push('ffmpeg: OK');
   } catch {
-    console.error('ERROR: ffmpeg not found. Install ffmpeg and set FFMPEG_PATH if needed.');
+    logger.info('ERROR: ffmpeg not found. Install ffmpeg and set FFMPEG_PATH if needed.');
     process.exit(1);
   }
 
@@ -64,7 +65,7 @@ async function checkDependencies() {
     });
     checks.push('ffprobe: OK');
   } catch {
-    console.error('ERROR: ffprobe not found. Install ffmpeg (includes ffprobe) and set FFPROBE_PATH if needed.');
+    logger.error('ERROR: ffprobe not found. Install ffmpeg (includes ffprobe) and set FFPROBE_PATH if needed.');
     process.exit(1);
   }
 
@@ -77,8 +78,8 @@ async function checkDependencies() {
     });
     checks.push('scenedetect: OK');
   } catch {
-    console.warn('WARNING: PySceneDetect not installed. Will fallback to ffmpeg scdet or uniform sampling.');
-    console.warn('  Install with: pip install scenedetect');
+    logger.warn('WARNING: PySceneDetect not installed. Will fallback to ffmpeg scdet or uniform sampling.');
+    logger.warn('  Install with: pip install scenedetect');
   }
 
   // Read overrides to show effective config
@@ -96,7 +97,7 @@ async function checkDependencies() {
     const tag = overrides.get('VISION_PROVIDER') ? '[前端]' : '[env]';
     checks.push(`视觉${tag}: ${visionProvider}/${visionModel}`);
   } else {
-    console.warn('WARNING: VISION_API_KEY not set.');
+    logger.warn('WARNING: VISION_API_KEY not set.');
   }
 
   if (audioProvider === 'none') {
@@ -105,14 +106,14 @@ async function checkDependencies() {
     const tag = overrides.get('AUDIO_PROVIDER') ? '[前端]' : '[env]';
     checks.push(`音频${tag}: ${audioProvider}/${audioModel}`);
   } else {
-    console.warn('WARNING: AUDIO_API_KEY not set.');
+    logger.warn('WARNING: AUDIO_API_KEY not set.');
   }
 
   if (overriddenKeys.length > 0) {
-    console.log('[config] 前端覆盖生效:', overriddenKeys.join(', '));
+    logger.info('[config] 前端覆盖生效:', overriddenKeys.join(', '));
   }
 
-  console.log('Dependency checks:', checks.join(', '));
+  logger.info('Dependency checks:', checks.join(', '));
 }
 
 // Start server
@@ -120,15 +121,15 @@ const port = config.PORT;
 
 checkDependencies().then(() => {
   const savedCount = loadSavedJobs();
-  if (savedCount > 0) console.log(`Reloaded ${savedCount} saved jobs from disk`);
+  if (savedCount > 0) logger.info(`Reloaded ${savedCount} saved jobs from disk`);
 
   const server = app.listen(port, () => {
-    console.log(`Video rePrompt server running at http://localhost:${port}`);
+    logger.info(`Video rePrompt server running at http://localhost:${port}`);
   });
 
   // Graceful shutdown
   const shutdown = () => {
-    console.log('\nShutting down...');
+    logger.info('\nShutting down...');
     server.close(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);

@@ -65,6 +65,7 @@
 
   const lightbox = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightboxImg');
+  const lightboxVideo = document.getElementById('lightboxVideo');
   const lightboxClose = document.getElementById('lightboxClose');
 
   let pollTimer = null;
@@ -606,6 +607,7 @@
           shotCount: j.totalShots || 0,
           status: j.status,
           shotRange: j.shotRange || null,
+          mode: j.mode || null,
           createdAt: j.createdAt || 0,
           savedAt: j.savedAt || j.createdAt || 0,
         });
@@ -632,7 +634,7 @@
         const mtime = srv ? srv.savedAt : (r.time || 0);
         const status = srv ? srv.status : 'expired';
         const shotRange = srv ? srv.shotRange : null;
-        return { ...r, alive, status, shotRange, createdAt, mtime: Math.max(mtime, createdAt) };
+        return { ...r, alive, status, shotRange, mode: srv ? srv.mode : null, createdAt, mtime: Math.max(mtime, createdAt) };
       });
 
       // Remove dead entries (no server record) — not saving yet but filter from display
@@ -682,6 +684,7 @@
           '<div class="recent-card-body">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
           '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头' + (r.shotRange ? '（' + r.shotRange + '）' : '') + ' · ' + formatDate(displayTime) + '</div>' +
+          (r.mode ? '<span class="mode-badge mode-badge-' + r.mode + '">' + (r.mode === 'video' ? '动态' : '单帧') + '</span>' : '') + ' ' +
           getStatusBadge(r.status) +
           '</div>';
         card.addEventListener('click', (e) => {
@@ -799,6 +802,9 @@
     recentList.querySelectorAll('.recent-delete-check').forEach(cb => { cb.checked = checked; });
     updateManageSelection();
   });
+  recentList.addEventListener('change', (e) => {
+    if (e.target.classList.contains('recent-delete-check')) updateManageSelection();
+  });
 
   recentPerPage.addEventListener('change', () => {
     recentPerPageCount = parseInt(recentPerPage.value);
@@ -905,11 +911,12 @@
     currentJobStatus = null;
   }
 
-  // ── Mode card switcher ──
-  document.querySelectorAll('.mode-card').forEach(card => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
+  // ── Mode chip switcher ──
+  document.querySelectorAll('.mode-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      chip.querySelector('input').checked = true;
     });
   });
 
@@ -965,6 +972,61 @@
   exportBtn2.addEventListener('click', exportToFile);
   clearCacheBtn.addEventListener('click', clearCache);
   retryBtn.addEventListener('click', resetToUpload);
+
+  // ── Log viewer ──
+  const viewLogBtn = document.getElementById('viewLogBtn');
+  const logViewer = document.getElementById('logViewer');
+  const logViewerContent = document.getElementById('logViewerContent');
+  const logViewerClose = document.getElementById('logViewerClose');
+  const logFileSelect = document.getElementById('logFileSelect');
+  const logRefreshBtn = document.getElementById('logRefreshBtn');
+
+  async function loadLogFiles() {
+    try {
+      const res = await fetch('/api/logs/files');
+      const data = await res.json();
+      logFileSelect.innerHTML = (data.files || []).map(f => `<option value="${f}">${f.replace('.log','')}</option>`).join('');
+    } catch {}
+  }
+
+  async function loadLogContent() {
+    logViewerContent.textContent = '加载中...';
+    try {
+      const file = logFileSelect.value;
+      const res = file
+        ? await fetch('/api/logs/file/' + file + '?n=500')
+        : await fetch('/api/logs/tail?n=500');
+      const data = await res.json();
+      logViewerContent.textContent = (data.lines || []).join('\n') || '(空)';
+      logViewerContent.scrollTop = logViewerContent.scrollHeight;
+    } catch (e) {
+      logViewerContent.textContent = '加载失败: ' + e.message;
+    }
+  }
+
+  viewLogBtn.addEventListener('click', async () => {
+    logViewer.classList.remove('hidden');
+    await loadLogFiles();
+    loadLogContent();
+  });
+  logViewerClose.addEventListener('click', () => logViewer.classList.add('hidden'));
+  logViewer.querySelector('.log-viewer-backdrop').addEventListener('click', () => logViewer.classList.add('hidden'));
+  logFileSelect.addEventListener('change', loadLogContent);
+  logRefreshBtn.addEventListener('click', loadLogContent);
+  logClearBtn.addEventListener('click', async () => {
+    if (!confirm('确定要清除今天的后台日志吗？此操作不可恢复。')) return;
+    const file = logFileSelect.value || 'today';
+    try {
+      const res = await fetch('/api/logs' + (file ? '/' + file : ''), { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) {
+        logViewerContent.textContent = '(已清除)';
+        loadLogContent();
+      } else {
+        alert('清除失败');
+      }
+    } catch (e) { alert('清除失败: ' + e.message); }
+  });
 
   // ── Lightbox ──
   lightboxClose.addEventListener('click', closeLightbox);
@@ -1029,7 +1091,7 @@
     setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('.mode-card.active').dataset.mode }),
+      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
     }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
@@ -1211,11 +1273,13 @@
             stopDetectAnim();
             clearInterval(pollTimer); pollTimer = null;
             setProgress(100, '分析完成！', '');
+            renderRecentAnalyses();
             setTimeout(() => showResults(job), 300);
             break;
           case 'error':
             stopDetectAnim();
             clearInterval(pollTimer); pollTimer = null;
+            renderRecentAnalyses();
             showError(job.error || '处理失败');
             break;
         }
@@ -1259,15 +1323,36 @@
     rangeSelectedCount.textContent = Math.min(total, 10);
     filmstrip.innerHTML = '';
     const thumbBase = sceneData.thumbBase || '/api/frames/' + currentJobId + '/';
+    const clipBase = sceneData.clipBase || '/api/clips/' + currentJobId + '/';
     for (let i = 0; i < total; i++) {
       const item = document.createElement('div');
       item.className = 'filmstrip-item';
       item.dataset.index = i + 1;
       item.innerHTML =
-        '<img src="' + thumbBase + i + '" alt="镜头 ' + (i + 1) + '" loading="lazy"' +
+        '<img class="filmstrip-thumb-img" src="' + thumbBase + i + '" alt="镜头 ' + (i + 1) + '" loading="lazy"' +
         ' onerror="this.outerHTML=\'<div style=width:120px;height:68px;display:flex;align-items:center;justify-content:center;background:var(--border);color:var(--text-secondary);font-size:0.75rem;border-radius:4px>&darr;</div>\'">' +
+        '<button class="filmstrip-play-btn" title="预览视频片段"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></button>' +
         '<div class="filmstrip-item-label">镜头 ' + (i + 1) + '</div>';
-      item.addEventListener('click', () => { rangeStart.value = i + 1; rangeEnd.value = i + 1; updateRangeFill(); });
+      item.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          const curStart = parseInt(rangeStart.value);
+          const clicked = i + 1;
+          rangeStart.value = Math.min(curStart, clicked);
+          rangeEnd.value = Math.max(curStart, clicked);
+        } else {
+          rangeStart.value = i + 1;
+          rangeEnd.value = i + 1;
+        }
+        updateRangeFill();
+      });
+      item.querySelector('.filmstrip-thumb-img').addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        openLightbox(thumbBase + i);
+      });
+      item.querySelector('.filmstrip-play-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLightbox(null, clipBase + i);
+      });
       filmstrip.appendChild(item);
     }
     updateRangeFill();
@@ -1301,6 +1386,7 @@
     resultsTitle.textContent = r.videoFile || '分析结果';
     resultsMeta.textContent = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
     resultsMeta.textContent += r.hasAudio ? ' . 含台词识别' : '';
+    resultsMeta.textContent += ' . 模式: ' + (r.mode === 'video' ? '视频动态' : '单帧推演');
     if (r.duration) resultsMeta.textContent += ' . ' + formatDuration(r.duration);
     if (r.totalWallMs) resultsMeta.textContent += ' . 耗时 ' + (r.totalWallMs / 1000).toFixed(0) + 's';
 
@@ -1322,7 +1408,11 @@
       const card = document.createElement('div');
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
-      let html = '<div class="shot-thumb"><img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy"><span class="shot-time-badge">' + time + '</span></div>';
+      const isVideoMode = r.mode === 'video' && shot.clipPath;
+      let html = '<div class="shot-thumb' + (isVideoMode ? ' shot-thumb-video' : '') + '">' +
+        '<img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy">' +
+        (isVideoMode ? '<div class="play-overlay"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></div>' : '') +
+        '<span class="shot-time-badge">' + time + '</span></div>';
       html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '<span class="shot-timing">视觉 ' + formatMs(shot.visionMs) + ' . 音频 ' + formatMs(shot.audioMs) + ' . ' + formatCompletedAt(shot.completedAt) + '</span></div>';
       html += '<div class="shot-section-label">画面</div><p class="shot-desc">' + escapeHtml(shot.description) + '</p>';
       if (shot.audioDescription) {
@@ -1332,7 +1422,7 @@
       }
       html += '</div>';
       card.innerHTML = html;
-      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath));
+      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, isVideoMode ? shot.clipPath : null));
       shotsTimeline.appendChild(card);
     });
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1396,8 +1486,33 @@
     }).catch(e => alert('清理失败：' + e.message)).finally(() => { clearCacheBtn.textContent = '清除缓存'; clearCacheBtn.disabled = false; });
   }
 
-  function openLightbox(src) { lightboxImg.src = src; lightbox.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-  function closeLightbox() { lightbox.classList.add('hidden'); document.body.style.overflow = ''; }
+  function openLightbox(src, videoSrc) {
+    if (videoSrc) {
+      lightboxImg.style.display = 'none';
+      lightboxVideo.style.display = '';
+      lightboxVideo.querySelector('source') && lightboxVideo.querySelector('source').remove();
+      const srcEl = document.createElement('source');
+      srcEl.src = videoSrc;
+      srcEl.type = 'video/mp4';
+      lightboxVideo.appendChild(srcEl);
+      lightboxVideo.load();
+      lightboxVideo.play().catch(() => {});
+    } else {
+      lightboxVideo.style.display = 'none';
+      lightboxVideo.pause();
+      lightboxVideo.querySelector('source') && lightboxVideo.querySelector('source').remove();
+      lightboxImg.style.display = '';
+      lightboxImg.src = src;
+    }
+    lightbox.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox() {
+    lightbox.classList.add('hidden');
+    document.body.style.overflow = '';
+    lightboxVideo.pause();
+    lightboxVideo.querySelector('source') && lightboxVideo.querySelector('source').remove();
+  }
 
   function showError(msg) { stopDetectAnim(); progressSection.classList.add('hidden'); rangeSection.classList.add('hidden'); errorSection.classList.remove('hidden'); errorMessage.textContent = msg; }
 

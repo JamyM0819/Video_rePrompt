@@ -2,7 +2,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const config = require('../utils/config');
-
+const logger = require('../utils/logger');
 /**
  * Extract full audio from video as MP3.
  * Then for each scene, slice out the audio segment.
@@ -18,19 +18,19 @@ async function extractAudioSegments(videoPath, scenes, jobId, onProgress) {
   const result = await extractFullAudio(videoPath, fullAudioPath);
 
   if (!result) {
-    console.log('[audio] No audio track in video, skipping');
+    logger.info('[audio] No audio track in video, skipping');
     return null;
   }
 
   if (!fs.existsSync(fullAudioPath)) {
-    console.log('[audio] Audio extraction produced no file, skipping');
+    logger.info('[audio] Audio extraction produced no file, skipping');
     return null;
   }
 
   // Step 1.5: Check if the audio track is silent
   const volume = await checkAudioVolume(fullAudioPath);
   if (volume && volume.max < -70) {
-    console.log(`[audio] Audio track is silent (max ${volume.max} dB), skipping`);
+    logger.info(`[audio] Audio track is silent (max ${volume.max} dB), skipping`);
     return null;
   }
 
@@ -80,13 +80,13 @@ function extractFullAudio(videoPath, outputPath) {
         resolve(outputPath);
       } else {
         // Video may have no audio track — this is OK, return null
-        console.log(`[audio] No audio track or extraction failed (exit ${code}), skipping`);
+        logger.info(`[audio] No audio track or extraction failed (exit ${code}), skipping`);
         resolve(null);
       }
     });
 
     proc.on('error', (err) => {
-      console.log(`[audio] ffmpeg spawn error, skipping audio: ${err.message}`);
+      logger.info(`[audio] ffmpeg spawn error, skipping audio: ${err.message}`);
       resolve(null);
     });
   });

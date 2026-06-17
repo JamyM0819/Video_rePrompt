@@ -2,7 +2,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const config = require('../utils/config');
-
+const logger = require('../utils/logger');
 /**
  * Run PySceneDetect to get scene start/end timestamps.
  * Returns: [{ startTime, endTime }] in seconds.
@@ -41,21 +41,21 @@ async function detectScenes(videoPath, jobId, maxShots, minDuration) {
       return parseSceneCSV(csvPath, limit, minDuration);
     }
   } catch (err) {
-    console.error('[sceneDetect] PySceneDetect failed:', err.message);
+    logger.error('[sceneDetect] PySceneDetect failed:', err.message);
   }
 
   // Fallback 1: ffmpeg scdet filter
   try {
     const ffThresh = minDuration != null ? Math.max(2, Math.round(10 * 0.3 / (minDuration || 0.3))) : 10;
-    console.log(`[sceneDetect] Falling back to ffmpeg scdet (threshold=${ffThresh})...`);
+    logger.info(`[sceneDetect] Falling back to ffmpeg scdet (threshold=${ffThresh})...`);
     const scenes = await detectWithFFmpeg(videoPath, ffThresh);
     if (scenes.length > 0) return mergeShortScenes(scenes, limit, minDuration);
   } catch (err) {
-    console.error('[sceneDetect] ffmpeg scdet failed:', err.message);
+    logger.error('[sceneDetect] ffmpeg scdet failed:', err.message);
   }
 
   // Fallback 2: uniform sampling
-  console.log('[sceneDetect] Falling back to uniform sampling...');
+  logger.info('[sceneDetect] Falling back to uniform sampling...');
   return uniformSample(videoPath, limit);
 }
 
@@ -150,12 +150,12 @@ async function uniformSample(videoPath, maxShots) {
   try {
     duration = await getVideoDuration(videoPath);
   } catch (err) {
-    console.error('[sceneDetect] getVideoDuration failed:', err.message);
+    logger.error('[sceneDetect] getVideoDuration failed:', err.message);
     // Last resort: try ffmpeg to get duration
     try {
       duration = await getDurationFromFFmpeg(videoPath);
     } catch (err2) {
-      console.error('[sceneDetect] ffmpeg duration also failed:', err2.message);
+      logger.error('[sceneDetect] ffmpeg duration also failed:', err2.message);
       // Give up, return a single frame at time 0
       return [{ startTime: 0, endTime: 1 }];
     }

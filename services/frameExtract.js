@@ -20,28 +20,32 @@ async function extractThumbnails(videoPath, scenes, jobId, onProgress) {
 }
 
 /**
- * Extract 3 frames per shot (start, middle, end) for temporal analysis.
- * Returns an array of { index, frames: [startPath, midPath, endPath] }.
+ * Extract frames per shot for temporal analysis.
+ * Always uses ~0.15s interval (dense enough to catch sub-second events),
+ * capped at 20 frames max per shot. Returns [{ index, frames, duration }, ...].
  */
-async function extractThreeFrames(videoPath, scenes, startIdx, jobId, onProgress) {
+async function extractMultiFrames(videoPath, scenes, startIdx, jobId, onProgress, frameCount = 5) {
   const outputDir = path.join(config.OUTPUT_DIR, jobId);
   fs.mkdirSync(outputDir, { recursive: true });
   const results = [];
+  const INTERVAL = 0.15;   // seconds between frames
+  const MAX_FRAMES = 20;
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    const dur = scene.endTime - scene.startTime;
     const start = scene.startTime;
-    const mid = start + dur / 2;
-    const end = scene.endTime - 0.1; // slightly before end to avoid next shot boundary
+    const end = Math.max(scene.endTime - 0.05, start + 0.1);
+    const dur = end - start;
 
+    const n = Math.min(MAX_FRAMES, Math.max(3, Math.ceil(dur / INTERVAL)));
     const framePaths = [];
-    for (const [label, ts] of [['start', start], ['mid', mid], ['end', Math.max(end, start + 0.05)]]) {
-      const fout = path.join(outputDir, `${label}_frame_${startIdx + i}.jpg`);
+    for (let f = 0; f < n; f++) {
+      const ts = f === n - 1 ? end : start + (dur / (n - 1)) * f;
+      const fout = path.join(outputDir, `f${f}_shot_${startIdx + i}.jpg`);
       await extractOneFrame(videoPath, ts, fout);
       framePaths.push(fout);
     }
-    results.push({ index: startIdx + i, frames: framePaths });
+    results.push({ index: startIdx + i, frames: framePaths, duration: dur });
     if (onProgress) onProgress(i);
   }
 
@@ -110,4 +114,4 @@ function formatTimestamp(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(6, '0')}`;
 }
 
-module.exports = { extractThumbnails, extractThreeFrames };
+module.exports = { extractThumbnails, extractMultiFrames };

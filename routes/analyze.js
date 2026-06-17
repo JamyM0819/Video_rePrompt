@@ -5,6 +5,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../utils/config');
 const overrides = require('../utils/overrides');
+const logger = require('../utils/logger');
 const { detectOnly, runRange } = require('../services/pipeline');
 const { downloadVideo } = require('../services/downloadVideo');
 
@@ -82,7 +83,7 @@ function saveJobToDisk(job) {
       savedAt: Date.now(),
     };
     fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(data), 'utf-8');
-  } catch (e) { console.error('[saveJob] Failed:', e.message); }
+  } catch (e) { logger.error('[saveJob] Failed:', e.message); }
 }
 
 // Reload jobs from disk on startup
@@ -129,7 +130,7 @@ router.post('/config', (req, res) => {
   const fields = { VISION_PROVIDER, VISION_BASE_URL, VISION_API_KEY, VISION_MODEL,
     AUDIO_PROVIDER, AUDIO_BASE_URL, AUDIO_API_KEY, AUDIO_MODEL, VISION_CONCURRENCY, VISION_MAX_TOKENS, AUDIO_CONCURRENCY };
   overrides.apply(fields);
-  console.log('[config] Updated:', Object.keys(fields).filter(k => overrides.get(k)).join(', '));
+  logger.info('[config] Updated:', Object.keys(fields).filter(k => overrides.get(k)).join(', '));
   res.json({ ok: true, overrides: overrides.getAll(), active: {
     VISION_PROVIDER: overrides.get('VISION_PROVIDER') || config.VISION_PROVIDER,
     VISION_BASE_URL: overrides.get('VISION_BASE_URL') || config.VISION_BASE_URL,
@@ -448,6 +449,46 @@ router.get('/frames/:jobId/:index', (req, res) => {
   res.sendFile(path.resolve(framePath));
 });
 
+// Serve video clip (for video mode preview)
+router.get('/clips/:jobId/:index', (req, res) => {
+  const { jobId, index } = req.params;
+  const clipPath = path.join(config.OUTPUT_DIR, jobId, `clip_${index}.mp4`);
+
+  if (!fs.existsSync(clipPath)) {
+    return res.status(404).json({ error: 'Clip not found' });
+  }
+
+  // Support range requests for HTML5 video seeking
+  const stat = fs.statSync(clipPath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunkSize = (end - start) + 1;
+
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type': 'video/mp4',
+    });
+
+    const stream = fs.createReadStream(clipPath, { start, end });
+    stream.pipe(res);
+    stream.on('error', () => res.status(500).json({ error: 'Stream error' }));
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
+    });
+    fs.createReadStream(clipPath).pipe(res);
+  }
+});
+
 // Export markdown file (solves CJK filename encoding with blob downloads)
 router.get('/export/:jobId', (req, res) => {
   const job = jobStore.get(req.params.jobId);
@@ -524,6 +565,7 @@ router.get('/jobs', (req, res) => {
       status: job.status,
       totalShots: job.sceneData?.totalShots || job.results?.totalShots || 0,
       shotRange: job.results?.shotRange || null,
+      mode: job.results?.mode || null,
       createdAt: job.createdAt,
       savedAt: job.savedAt || job.createdAt,
     });
@@ -624,6 +666,38 @@ router.post('/delete-jobs', (req, res) => {
     if (jobStore.has(jid)) { jobStore.delete(jid); deleted++; }
   }
   res.json({ ok: true, deleted });
+});
+
+// ── Log endpoints ──
+const logUtil = require('../utils/logger');
+
+// GET /api/logs/tail — return last N lines of today's log
+router.get('/logs/tail', (req, res) => {
+  const lines = parseInt(req.query.n) || 100;
+  res.json({ lines: logUtil.tail(Math.min(lines, 500)) });
+});
+
+// GET /api/logs/files — list available log files
+router.get('/logs/files', (req, res) => {
+  res.json({ files: logUtil.listFiles() });
+});
+
+// GET /api/logs/file/:name — read a specific log file
+router.get('/logs/file/:name', (req, res) => {
+  const lines = parseInt(req.query.n) || 200;
+  res.json({ lines: logUtil.readFile(req.params.name, Math.min(lines, 1000)) });
+});
+
+// DELETE /api/logs — clear today's log
+router.delete('/logs', (req, res) => {
+  const ok = logUtil.clear();
+  res.json({ ok });
+});
+
+// DELETE /api/logs/:name — delete a specific log file
+router.delete('/logs/:name', (req, res) => {
+  const ok = logUtil.deleteFile(req.params.name);
+  res.json({ ok });
 });
 
 module.exports = { router, jobStore, loadSavedJobs };

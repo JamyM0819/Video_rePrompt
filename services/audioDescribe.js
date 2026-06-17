@@ -3,6 +3,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const config = require('../utils/config');
+const logger = require('../utils/logger');
 const overrides = require('../utils/overrides');
 
 function cfg(key) {
@@ -39,7 +40,7 @@ async function describeAudio(audioPath) {
     }
     return text.trim();
   } catch (err) {
-    console.error('[audioDescribe] Failed:', err.message);
+    logger.error('[audioDescribe] Failed:', err.message);
     return '[语音识别失败]';
   }
 }
@@ -255,11 +256,11 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   if (!audioPaths || audioPaths.length === 0) return [];
 
   if (cfg('AUDIO_PROVIDER') === 'none') {
-    console.log('[audioDescribe] Audio analysis disabled (AUDIO_PROVIDER=none)');
+    logger.info('[audioDescribe] Audio analysis disabled (AUDIO_PROVIDER=none)');
     return audioPaths.map(() => '[音频分析已关闭]');
   }
 
-  console.log(`[audioDescribe] Active: ${cfg('AUDIO_PROVIDER')}/${cfg('AUDIO_MODEL')} @ ${cfg('AUDIO_BASE_URL')}`);
+  logger.info(`[audioDescribe] Active: ${cfg('AUDIO_PROVIDER')}/${cfg('AUDIO_MODEL')} @ ${cfg('AUDIO_BASE_URL')}`);
 
   const concurrency = parseInt(cfg('AUDIO_CONCURRENCY') || cfg('VISION_CONCURRENCY')) || 3;
   const results = new Array(audioPaths.length);
@@ -268,7 +269,7 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
   let next = 0;
   let done = 0;
 
-  console.log(`[audioDescribe] Transcribing ${audioPaths.length} segments (concurrency=${concurrency})...`);
+  logger.info(`[audioDescribe] Transcribing ${audioPaths.length} segments (concurrency=${concurrency})...`);
 
   const worker = async () => {
     while (next < audioPaths.length) {
@@ -278,14 +279,14 @@ async function describeAllAudio(audioPaths, onProgress, customPrompt) {
       timings[i] = Date.now() - t0;
       completedAt[i] = Date.now();
       done++;
-      console.log(`[audioDescribe] Segment ${i + 1}/${audioPaths.length}: done (${timings[i]}ms)`);
+      logger.info(`[audioDescribe] Segment ${i + 1}/${audioPaths.length}: done (${timings[i]}ms)`);
       if (onProgress) onProgress(done - 1);
     }
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, audioPaths.length) }, () => worker()));
 
-  console.log(`[audioDescribe] Done: ${results.length} segments`);
+  logger.info(`[audioDescribe] Done: ${results.length} segments`);
   return { results, timings, completedAt };
 }
 

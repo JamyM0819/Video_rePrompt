@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=13">
+  <link rel="stylesheet" href="/css/style.css?v=24">
 </head>
 <body>
   <div class="app">
@@ -19,36 +19,6 @@
         <div class="header-toolbar" id="headerToolbar"></div>
       </div>
     </header>
-
-    <!-- Mode Banner -->
-    <div class="mode-banner">
-      <div class="mode-cards">
-        <div class="mode-card active" data-mode="image" id="modeImageCard">
-          <div class="mode-card-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </div>
-          <div class="mode-card-text">
-            <span class="mode-card-title">单帧推演</span>
-            <span class="mode-card-desc">每镜头截取一帧，分析画面构图</span>
-          </div>
-        </div>
-        <div class="mode-card" data-mode="video" id="modeVideoCard">
-          <div class="mode-card-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-          </div>
-          <div class="mode-card-text">
-            <span class="mode-card-title">视频动态</span>
-            <span class="mode-card-desc">每镜头切短片，分析动作与情节变化</span>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Upload Section -->
     <section id="uploadSection" class="upload-section">
@@ -133,6 +103,7 @@
           <div class="settings-top-right">
             <label class="min-shot-label">最短镜头<span class="min-shot-unit">秒</span><input type="number" id="minShotDuration" class="min-shot-input" value="1.0" min="0.1" max="10" step="0.1"></label>
             <button id="clearCacheBtn" class="btn-clear-top">清除所有缓存</button>
+            <button id="viewLogBtn" class="btn-clear-top" style="border-color:var(--border);color:var(--text-secondary)">后台日志</button>
           </div>
         </div>
         <div class="custom-prompt-row">
@@ -222,7 +193,7 @@
     <section id="rangeSection" class="range-section hidden">
       <div class="range-card">
         <h3>检测到 <span id="rangeCount">0</span> 个镜头</h3>
-        <p class="range-subtitle">拖拽滑块选择要分析的镜头范围</p>
+        <p class="range-subtitle">拖拽滑块选择镜头范围 · Shift+点击缩略图选中区间 · 双击预览</p>
         <div class="range-slider-wrap">
           <input type="range" id="rangeStart" class="range-input" min="1" value="1">
           <input type="range" id="rangeEnd" class="range-input" min="1" value="1">
@@ -239,6 +210,11 @@
           <label class="range-input-label">到</label>
           <input type="number" id="rangeEndNum" class="range-num" min="1" value="10">
           <span class="range-input-unit">（共 <span id="rangeSelectedCount">10</span> 个）</span>
+        </div>
+        <div class="range-mode-row">
+          <span class="range-mode-label">分析模式：</span>
+          <label class="mode-chip active" data-mode="image"><input type="radio" name="analysisMode" value="image" checked> 单帧推演</label>
+          <label class="mode-chip" data-mode="video"><input type="radio" name="analysisMode" value="video"> 视频动态</label>
         </div>
         <button id="rangeConfirmBtn" class="browse-btn">开始分析选中范围</button>
         <div class="filmstrip-wrap">
@@ -282,9 +258,27 @@
     <div class="lightbox-content">
       <button id="lightboxClose" class="lightbox-close">&times;</button>
       <img id="lightboxImg" src="" alt="Full frame">
+      <video id="lightboxVideo" class="lightbox-video" controls autoplay loop playsinline style="display:none"></video>
     </div>
   </div>
 
-  <script src="/js/app.js?v=13"></script>
+  <!-- Log Viewer -->
+  <div id="logViewer" class="log-viewer hidden">
+    <div class="log-viewer-backdrop"></div>
+    <div class="log-viewer-panel">
+      <div class="log-viewer-header">
+        <span>后台日志</span>
+        <div class="log-viewer-header-r">
+          <select id="logFileSelect" class="log-file-select" title="选择日期"></select>
+          <button id="logRefreshBtn" class="tb-btn">刷新</button>
+          <button id="logClearBtn" class="tb-btn" style="border-color:var(--error);color:var(--error)">清除后台日志</button>
+          <button id="logViewerClose" class="lightbox-close" style="position:static;font-size:1.5rem">&times;</button>
+        </div>
+      </div>
+      <pre id="logViewerContent" class="log-viewer-content">加载中...</pre>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=24"></script>
 </body>
 </html>

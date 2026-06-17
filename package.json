@@ -1,6 +1,6 @@
 {
   "name": "video-reprompt",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Reverse-engineer prompts from video shots using AI vision analysis",
   "main": "server.js",
   "scripts": {
