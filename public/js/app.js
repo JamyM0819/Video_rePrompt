@@ -905,6 +905,14 @@
     currentJobStatus = null;
   }
 
+  // ── Mode card switcher ──
+  document.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+    });
+  });
+
   // ── Tab switching ──
   tabFile.addEventListener('click', () => {
     tabFile.classList.add('active'); tabUrl.classList.remove('active');
@@ -1021,7 +1029,7 @@
     setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
+      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('.mode-card.active').dataset.mode }),
     }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');

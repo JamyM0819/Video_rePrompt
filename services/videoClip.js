@@ -27,12 +27,20 @@ async function extractVideoClips(videoPath, scenes, startIdx, jobId, onProgress)
 
 function cutClip(videoPath, startTime, duration, outputPath) {
   return new Promise((resolve, reject) => {
+    // Re-encode with tight constraints to keep base64 under 20MB API limit.
+    // CRF 30, max 480p, no audio (audio analyzed separately), maxrate cap.
     const args = [
       '-ss', formatTimestamp(startTime),
       '-i', videoPath,
       '-t', duration.toFixed(3),
-      '-c', 'copy',        // no re-encode
-      '-avoid_negative_ts', 'make_zero',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '30',
+      '-maxrate', '1500k',
+      '-bufsize', '3000k',
+      '-vf', 'scale=ceil(iw*min(1,480/ih)/2)*2:ceil(ih*min(1,480/ih)/2)*2',
+      '-an',
+      '-movflags', '+faststart',
       '-y',
       outputPath,
     ];
@@ -46,28 +54,11 @@ function cutClip(videoPath, startTime, duration, outputPath) {
 
     proc.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
+        const sizeMB = (fs.statSync(outputPath).size / 1024 / 1024).toFixed(1);
+        console.log(`[videoClip] ${path.basename(outputPath)}: ${sizeMB}MB (${duration.toFixed(1)}s)`);
         resolve(outputPath);
       } else {
-        // Fallback: re-encode the clip
-        const fallbackArgs = [
-          '-i', videoPath,
-          '-ss', formatTimestamp(startTime),
-          '-t', duration.toFixed(3),
-          '-c:v', 'libx264', '-preset', 'ultrafast',
-          '-c:a', 'aac',
-          '-y',
-          outputPath,
-        ];
-        const p2 = spawn(config.FFMPEG_PATH, fallbackArgs, {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let e2 = '';
-        p2.stderr.on('data', (d) => { e2 += d.toString(); });
-        p2.on('close', (c2) => {
-          if (c2 === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) resolve(outputPath);
-          else reject(new Error(`Video clip failed at ${formatTimestamp(startTime)}: ${e2.slice(-200)}`));
-        });
-        p2.on('error', reject);
+        reject(new Error(`Video clip failed at ${formatTimestamp(startTime)}: ${stderr.slice(-200)}`));
       }
     });
 

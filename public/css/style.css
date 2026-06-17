@@ -121,6 +121,77 @@ body {
   color: #fff;
 }
 
+/* Mode Banner */
+.mode-banner {
+  margin-bottom: 28px;
+}
+
+.mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.25s;
+  user-select: none;
+}
+
+.mode-card:hover {
+  border-color: #3a3f55;
+  background: var(--surface-hover);
+}
+
+.mode-card.active {
+  border-color: var(--accent);
+  background: rgba(74, 108, 247, 0.08);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.mode-card-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+  color: var(--text-secondary);
+  transition: all 0.25s;
+}
+
+.mode-card.active .mode-card-icon {
+  background: rgba(74, 108, 247, 0.15);
+  color: var(--accent);
+}
+
+.mode-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mode-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mode-card-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
 /* Upload Section */
 
 /* Input Tabs */
@@ -354,24 +425,6 @@ body {
   color: var(--text-secondary);
   font-size: 0.9rem;
   white-space: nowrap;
-}
-
-.mode-radio {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.mode-radio input {
-  cursor: pointer;
-}
-
-.mode-radio:has(input:checked) {
-  color: var(--accent);
-  font-weight: 500;
 }
 
 .shots-input {

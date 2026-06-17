@@ -1,5 +1,5 @@
 const { detectScenes, getVideoDuration } = require('./sceneDetect');
-const { extractFrames } = require('./frameExtract');
+const { extractThumbnails } = require('./frameExtract');
 const { describeAllFrames, describeAllVideoClips } = require('./visionDescribe');
 const { extractAudioSegments } = require('./audioExtract');
 const { describeAllAudio } = require('./audioDescribe');
@@ -28,7 +28,7 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration
     logLine: `抽取 ${scenes.length} 个镜头缩略图...`,
   });
 
-  const framePaths = await extractFrames(videoPath, scenes, jobId, (i) => {
+  const framePaths = await extractThumbnails(videoPath, scenes, jobId, (i) => {
     updateJob(jobId, { progress: { stage: 'extracting_thumbs', current: i + 1, total: scenes.length } });
   });
 
