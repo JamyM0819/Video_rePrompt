@@ -4,32 +4,48 @@ const path = require('path');
 const config = require('../utils/config');
 
 /**
- * Extract a single JPEG frame from the video at the given timestamp.
- * Uses fast seeking (-ss before -i) and returns the output path.
+ * Extract one thumbnail JPEG per scene (for filmstrip).
  */
-async function extractFrames(videoPath, scenes, jobId, onProgress) {
+async function extractThumbnails(videoPath, scenes, jobId, onProgress) {
   const outputDir = path.join(config.OUTPUT_DIR, jobId);
   fs.mkdirSync(outputDir, { recursive: true });
+  const paths = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const fp = path.join(outputDir, `frame_${i}.jpg`);
+    await extractOneFrame(videoPath, scenes[i].startTime, fp);
+    paths.push(fp);
+    if (onProgress) onProgress(i);
+  }
+  return paths;
+}
 
-  const framePaths = [];
+/**
+ * Extract 3 frames per shot (start, middle, end) for temporal analysis.
+ * Returns an array of { index, frames: [startPath, midPath, endPath] }.
+ */
+async function extractThreeFrames(videoPath, scenes, startIdx, jobId, onProgress) {
+  const outputDir = path.join(config.OUTPUT_DIR, jobId);
+  fs.mkdirSync(outputDir, { recursive: true });
+  const results = [];
 
   for (let i = 0; i < scenes.length; i++) {
-    const timestamp = scenes[i].startTime;
-    const framePath = path.join(outputDir, `frame_${i}.jpg`);
+    const scene = scenes[i];
+    const dur = scene.endTime - scene.startTime;
+    const start = scene.startTime;
+    const mid = start + dur / 2;
+    const end = scene.endTime - 0.1; // slightly before end to avoid next shot boundary
 
-    // Skip if already extracted
-    if (fs.existsSync(framePath)) {
-      framePaths.push(framePath);
-      if (onProgress) onProgress(i);
-      continue;
+    const framePaths = [];
+    for (const [label, ts] of [['start', start], ['mid', mid], ['end', Math.max(end, start + 0.05)]]) {
+      const fout = path.join(outputDir, `${label}_frame_${startIdx + i}.jpg`);
+      await extractOneFrame(videoPath, ts, fout);
+      framePaths.push(fout);
     }
-
-    await extractOneFrame(videoPath, timestamp, framePath);
-    framePaths.push(framePath);
+    results.push({ index: startIdx + i, frames: framePaths });
     if (onProgress) onProgress(i);
   }
 
-  return framePaths;
+  return results;
 }
 
 function extractOneFrame(videoPath, timestamp, outputPath) {
@@ -94,4 +110,4 @@ function formatTimestamp(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(6, '0')}`;
 }
 
-module.exports = { extractFrames };
+module.exports = { extractThumbnails, extractThreeFrames };

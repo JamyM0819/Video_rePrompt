@@ -1,8 +1,9 @@
 const { detectScenes, getVideoDuration } = require('./sceneDetect');
 const { extractFrames } = require('./frameExtract');
-const { describeAllFrames } = require('./visionDescribe');
+const { describeAllFrames, describeAllVideoClips } = require('./visionDescribe');
 const { extractAudioSegments } = require('./audioExtract');
 const { describeAllAudio } = require('./audioDescribe');
+const { extractVideoClips } = require('./videoClip');
 const fs = require('fs');
 const path = require('path');
 
@@ -58,8 +59,9 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration
 /**
  * Phase 2: Analyze selected shot range. Frames already extracted in Phase 1.
  */
-async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt, minShotDuration) {
+async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt, minShotDuration, mode) {
   const skipAudio = require('../utils/config').AUDIO_PROVIDER === 'none';
+  const isVideo = mode === 'video';
 
   try {
     updateJob(jobId, { logLine: `开始处理镜头 ${startShot + 1} ~ ${endShot + 1}...` });
@@ -68,17 +70,32 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
     const allScenes = await detectScenes(videoPath, jobId, Infinity, minDur);
     const selectedScenes = allScenes.slice(startShot, endShot + 1);
 
-    // Frames are already on disk from Phase 1 -- just collect paths
     const path = require('path');
     const config = require('../utils/config');
     const outputDir = path.join(config.OUTPUT_DIR, jobId);
-    const framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${startShot + i}.jpg`));
 
-    updateJob(jobId, {
-      status: 'extracting',
-      progress: { stage: 'extracting_frames', current: selectedScenes.length, total: selectedScenes.length },
-      logLine: `复用已抽取的 ${selectedScenes.length} 帧${skipAudio ? '' : '，提取音频片段...'}`,
-    });
+    let framePaths, visualResults, visualDone = 0;
+    const totalVisual = selectedScenes.length;
+
+    if (isVideo) {
+      updateJob(jobId, {
+        status: 'extracting',
+        progress: { stage: 'extracting', current: 0, total: totalVisual },
+        logLine: `切割 ${totalVisual} 个视频片段（视频模式）...`,
+      });
+      const clipPaths = await extractVideoClips(videoPath, selectedScenes, startShot, jobId, (i) => {
+        updateJob(jobId, { progress: { stage: 'extracting', current: i + 1, total: totalVisual } });
+      });
+      framePaths = clipPaths || selectedScenes.map((_, i) => path.join(outputDir, `frame_${startShot + i}.jpg`));
+      updateJob(jobId, { logLine: `已切割 ${framePaths.length} 个片段${skipAudio ? '' : '，提取音频...'}` });
+    } else {
+      framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${startShot + i}.jpg`));
+      updateJob(jobId, {
+        status: 'extracting',
+        progress: { stage: 'extracting_frames', current: totalVisual, total: totalVisual },
+        logLine: `复用已抽取的 ${totalVisual} 帧${skipAudio ? '' : '，提取音频片段...'}`,
+      });
+    }
 
     const audioPaths = skipAudio ? null : await extractAudioSegments(videoPath, selectedScenes, jobId, () => {}).catch(err => {
       updateJob(jobId, { logLine: `音频提取失败: ${err.message}` }); return null;
@@ -87,37 +104,26 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
     const hasAudio = !skipAudio && audioPaths && audioPaths.length > 0;
     updateJob(jobId, { logLine: hasAudio ? `音频片段提取完成` : `准备就绪` });
 
-    // Analyze
     const totalItems = framePaths.length + (hasAudio ? audioPaths.length : 0);
-    let visualDone = 0, audioDone = 0;
+    let audioDone = 0;
 
     const updateProgress = () => {
       updateJob(jobId, { status: 'analyzing', progress: { stage: 'analyzing', current: visualDone + audioDone, total: totalItems } });
     };
     updateProgress();
 
-    updateJob(jobId, { logLine: `开始分析 ${totalItems} 项（${framePaths.length} 画面 + ${hasAudio ? audioPaths.length : 0} 台词）...` });
+    updateJob(jobId, { logLine: `开始分析 ${totalItems} 项（${framePaths.length} ${isVideo ? '视频' : '画面'} + ${hasAudio ? audioPaths.length : 0} 台词）...` });
 
-    const analysisStart = Date.now();
-    const [visionOut, audioOut] = await Promise.all([
-      describeAllFrames(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt),
-      hasAudio ? describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt) : Promise.resolve(null),
-    ]);
-    const analysisEnd = Date.now();
-    const totalWallMs = analysisEnd - analysisStart;
+    if (isVideo) {
+      visualResults = await describeAllVideoClips(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt);
+    } else {
+      const visionOut = await describeAllFrames(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt);
+      visualResults = visionOut?.results || visionOut;
+    }
 
-    const visualResults = visionOut?.results || visionOut;
-    const visualTimings = visionOut?.timings || [];
-    const visualCompletedAt = visionOut?.completedAt || [];
-    const audioResults = audioOut?.results || audioOut;
-    const audioTimings = audioOut?.timings || [];
-    const audioCompletedAt = audioOut?.completedAt || [];
+    const audioResults = hasAudio ? (await describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt)) : null;
 
     updateJob(jobId, { logLine: `分析完成！编译结果中...` });
-
-    const totalVisionMs = visualTimings.reduce((s, t) => s + t, 0);
-    const totalAudioMs = audioTimings.reduce((s, t) => s + t, 0);
-    updateJob(jobId, { logLine: `总耗时 ${(totalWallMs / 1000).toFixed(0)}s（视觉 ${totalVisionMs / 1000}s / 音频 ${totalAudioMs / 1000}s）` });
 
     const shots = selectedScenes.map((scene, i) => ({
       index: startShot + i,
@@ -126,9 +132,6 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       framePath: `/api/frames/${jobId}/${startShot + i}`,
       description: visualResults[i] || '[无画面描述]',
       audioDescription: hasAudio && audioResults[i] ? audioResults[i] : undefined,
-      visionMs: visualTimings[i] || 0,
-      audioMs: audioTimings[i] || 0,
-      completedAt: visualCompletedAt[i] || audioCompletedAt[i] || analysisEnd,
     }));
 
     updateJob(jobId, {
@@ -139,7 +142,7 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
         videoFile: videoName || videoPath.split(/[\\/]/).pop(),
         totalShots: shots.length, shotRange: `${startShot + 1}-${endShot + 1}`,
         hasAudio, shots,
-        totalWallMs,
+        mode: isVideo ? 'video' : 'image',
       },
     });
   } catch (err) {
