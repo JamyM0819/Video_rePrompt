@@ -824,6 +824,27 @@
     try { return JSON.parse(localStorage.getItem('promptHistory') || '[]'); } catch { return []; }
   }
 
+  function getPromptPresets() {
+    try { return JSON.parse(localStorage.getItem('promptPresets') || '[]'); } catch { return []; }
+  }
+
+  function savePromptPreset(text) {
+    if (!text || !text.trim()) return;
+    const trimmed = text.trim();
+    let presets = getPromptPresets();
+    if (presets.indexOf(trimmed) !== -1) return; // already saved
+    presets.push(trimmed);
+    if (presets.length > 20) presets = presets.slice(-20);
+    localStorage.setItem('promptPresets', JSON.stringify(presets));
+    renderPromptHistory();
+  }
+
+  function deletePromptPreset(text) {
+    let presets = getPromptPresets().filter(p => p !== text);
+    localStorage.setItem('promptPresets', JSON.stringify(presets));
+    renderPromptHistory();
+  }
+
   function savePromptHistory(text) {
     if (!text || !text.trim()) return;
     const trimmed = text.trim();
@@ -841,13 +862,25 @@
   }
 
   function renderPromptHistory() {
-    const h = getPromptHistory();
-    if (h.length === 0) { promptHistory.classList.add('hidden'); return; }
+    const presets = getPromptPresets();
+    const history = getPromptHistory().filter(p => presets.indexOf(p) === -1);
+    if (presets.length === 0 && history.length === 0) { promptHistory.classList.add('hidden'); return; }
     promptHistory.classList.remove('hidden');
     promptHistory.innerHTML = '';
-    h.forEach(text => {
+
+    const makeChip = (text, isPinned) => {
       const chip = document.createElement('span');
-      chip.className = 'prompt-chip';
+      chip.className = 'prompt-chip' + (isPinned ? ' prompt-chip-pinned' : '');
+      const pin = document.createElement('span');
+      pin.className = 'prompt-chip-pin';
+      pin.title = isPinned ? '取消固定' : '固定为预设';
+      pin.textContent = isPinned ? '📌' : '📌';
+      pin.style.opacity = isPinned ? '1' : '0.3';
+      pin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isPinned) deletePromptPreset(text);
+        else savePromptPreset(text);
+      });
       const span = document.createElement('span');
       span.className = 'prompt-chip-text';
       span.textContent = text;
@@ -856,15 +889,23 @@
       del.className = 'prompt-chip-del';
       del.textContent = '✕';
       del.title = '删除此条';
-      del.addEventListener('click', (e) => { e.stopPropagation(); deletePromptHistory(text); });
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isPinned) deletePromptPreset(text);
+        else deletePromptHistory(text);
+      });
+      chip.appendChild(pin);
       chip.appendChild(span);
       chip.appendChild(del);
       chip.addEventListener('click', () => {
         customPromptInput.value = text;
         customPromptInput.focus();
       });
-      promptHistory.appendChild(chip);
-    });
+      return chip;
+    };
+
+    presets.forEach(text => promptHistory.appendChild(makeChip(text, true)));
+    history.forEach(text => promptHistory.appendChild(makeChip(text, false)));
   }
 
   customPromptSubmit.addEventListener('click', () => {

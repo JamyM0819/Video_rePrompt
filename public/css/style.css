@@ -545,6 +545,25 @@ body {
   background: var(--error);
   color: #fff;
 }
+
+.prompt-chip-pinned {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.prompt-chip-pinned:hover {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: var(--success);
+}
+
+.prompt-chip-pin {
+  font-size: 0.7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+
 .range-card {
   background: var(--surface);
   border: 1px solid var(--border-active);
