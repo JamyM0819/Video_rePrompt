@@ -78,16 +78,16 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration
 /**
  * Phase 2: Analyze selected shot range. Frames already extracted in Phase 1.
  */
-async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoName, customPrompt, minShotDuration, mode) {
+async function runRange(videoPath, jobId, updateJob, selectedScenes, videoName, customPrompt, mode) {
   const skipAudio = config.AUDIO_PROVIDER === 'none';
   const isVideo = mode === 'video';
 
   try {
-    updateJob(jobId, { logLine: `开始处理镜头 ${startShot + 1} ~ ${endShot + 1}...` });
-
-    const minDur = minShotDuration != null ? parseFloat(minShotDuration) : null;
-    const allScenes = await detectScenes(videoPath, jobId, Infinity, minDur);
-    const selectedScenes = allScenes.slice(startShot, endShot + 1);
+    const selectedTotal = selectedScenes.length;
+    if (selectedTotal === 0) throw new Error('No scenes selected');
+    const firstIdx = selectedScenes[0].index;
+    const lastIdx = selectedScenes[selectedTotal - 1].index;
+    updateJob(jobId, { logLine: `开始处理镜头 ${firstIdx} ~ ${lastIdx}（共 ${selectedTotal} 个）...` });
 
     const outputDir = path.join(config.OUTPUT_DIR, jobId);
 
@@ -103,40 +103,50 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       });
 
       visualResults = new Array(totalVisual);
+      visionTimings = new Array(totalVisual);
+      visionCompletedAt = new Array(totalVisual);
 
       if (videoItems.length > 0) {
         updateJob(jobId, { logLine: `切割 ${videoItems.length} 个视频片段...` });
         const clipData = [];
         for (const vi of videoItems) {
-          const clips = await extractVideoClips(videoPath, [vi.scene], startShot + vi.origIdx, jobId, () => {});
+          const clips = await extractVideoClips(videoPath, [vi.scene], selectedScenes[vi.origIdx].index, jobId, () => {});
           clipData.push({ ...clips[0], origIdx: vi.origIdx });
         }
-        const clipResults = await describeAllVideoClips(clipData.map(c => ({ path: c.path, duration: c.duration })), (n) => {
+        const clipOut = await describeAllVideoClips(clipData.map(c => ({ path: c.path, duration: c.duration })), (n) => {
           visualDone = n;
           updateJob(jobId, { status: 'analyzing', progress: { stage: 'analyzing', current: visualDone, total: totalVisual } });
         }, customPrompt);
-        clipData.forEach((c, i) => { visualResults[c.origIdx] = clipResults[i]; });
+        clipData.forEach((c, i) => {
+          visualResults[c.origIdx] = clipOut.results[i];
+          if (clipOut.timings) visionTimings[c.origIdx] = clipOut.timings[i];
+          if (clipOut.completedAt) visionCompletedAt[c.origIdx] = clipOut.completedAt[i];
+        });
       }
 
       if (shortItems.length > 0) {
         updateJob(jobId, { logLine: `${shortItems.length} 个短镜头使用多帧图片分析...` });
         const shortScenes = shortItems.map(si => si.scene);
         const firstShortIdx = shortItems[0].origIdx;
-        const frameSets = await extractMultiFrames(videoPath, shortScenes, startShot + firstShortIdx, jobId, () => {}, 5);
+        const frameSets = await extractMultiFrames(videoPath, shortScenes, selectedScenes[firstShortIdx].index, jobId, () => {}, 5);
         const totalShortFrames = frameSets.reduce((s, fs) => s + fs.frames.length, 0);
         updateJob(jobId, { logLine: `短镜头共 ${totalShortFrames} 帧` });
-        const frameResults = await describeAllShots(
+        const frameOut = await describeAllShots(
           frameSets.map(fs => ({ frames: fs.frames, duration: fs.duration })),
           (n) => { visualDone = (videoItems.length || 0) + n; updateJob(jobId, { status: 'analyzing', progress: { stage: 'analyzing', current: visualDone, total: totalVisual } }); },
           customPrompt
         );
-        shortItems.forEach((si, i) => { visualResults[si.origIdx] = frameResults[i]; });
+        shortItems.forEach((si, i) => {
+          visualResults[si.origIdx] = frameOut.results[i];
+          if (frameOut.timings) visionTimings[si.origIdx] = frameOut.timings[i];
+          if (frameOut.completedAt) visionCompletedAt[si.origIdx] = frameOut.completedAt[i];
+        });
       }
 
       visualDone = totalVisual;
-      framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${startShot + i}.jpg`));
+      framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${selectedScenes[i].index}.jpg`));
     } else {
-      framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${startShot + i}.jpg`));
+      framePaths = selectedScenes.map((_, i) => path.join(outputDir, `frame_${selectedScenes[i].index}.jpg`));
       updateJob(jobId, {
         status: 'extracting',
         progress: { stage: 'extracting_frames', current: totalVisual, total: totalVisual },
@@ -144,50 +154,90 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       });
     }
 
-    // Audio: full_audio.mp3 already extracted in Phase 1, submit to FileTrans
-    let audioResults = null, hasAudio = false;
+    // ── Start audio early (FileTrans is async, OSS upload fast) ──
+    let audioPromise = null;
     if (!skipAudio) {
-      const fullAudio = path.join(outputDir, 'full_audio.mp3');
+      let fullAudio = path.join(outputDir, 'full_audio.mp3');
+      if (!fs.existsSync(fullAudio)) {
+        updateJob(jobId, { logLine: `提取整段音频...` });
+        try { await extractFullAudio(videoPath, fullAudio); } catch (e) { logger.warn('[audio] extract failed:', e.message); }
+      }
       if (fs.existsSync(fullAudio)) {
-        updateJob(jobId, { logLine: `提交整段音频异步识别...` });
-        try {
-          const ft = await transcribeFileTrans(fullAudio);
-          updateJob(jobId, { logLine: `音频识别完成：${ft.sentences.length} 句，${ft.wordCount} 词` });
-          audioResults = assignToShots(ft.sentences, selectedScenes);
-          hasAudio = true;
-        } catch (err) {
-          updateJob(jobId, { logLine: `音频识别失败: ${err.message}` });
-          audioResults = [];
+        // Check for cached transcription result
+        const cacheFile = path.join(outputDir, 'transcription.json');
+        let cacheValid = false;
+        if (fs.existsSync(cacheFile)) {
+          try {
+            const audioStat = fs.statSync(fullAudio);
+            const cacheStat = fs.statSync(cacheFile);
+            // Use cache if audio hasn't changed since last transcription
+            if (cacheStat.mtimeMs >= audioStat.mtimeMs) {
+              audioPromise = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+              cacheValid = true;
+              updateJob(jobId, { logLine: `复用缓存的音频识别结果` });
+            }
+          } catch {}
         }
-      } else {
-        updateJob(jobId, { logLine: `未检测到音频` });
+        if (!cacheValid) {
+          updateJob(jobId, { logLine: `提交整段音频异步识别...` });
+          audioPromise = transcribeFileTrans(fullAudio).then(ft => {
+            // Cache the result
+            try { fs.writeFileSync(cacheFile, JSON.stringify(ft), 'utf-8'); } catch {}
+            return ft;
+          }).catch(err => {
+            logger.error(`[pipeline] FileTrans failed:`, err);
+            updateJob(jobId, { logLine: `音频识别失败: ${err.message}` });
+            return null;
+          });
+        }
       }
     }
 
-    updateJob(jobId, { logLine: hasAudio ? `音频识别完成` : `准备就绪` });
-
+    // ── Visual analysis ──
+    let visionTimings = null, visionCompletedAt = null; const tVision = Date.now();
     const updateProgress = () => {
       updateJob(jobId, { status: 'analyzing', progress: { stage: 'analyzing', current: visualDone, total: totalVisual } });
     };
     updateProgress();
 
-    // Run visual analysis (single-frame mode; video mode already done above)
     if (!isVideo) {
       updateJob(jobId, { logLine: `开始分析 ${totalVisual} 帧...` });
       const visionOut = await describeAllFrames(framePaths, (n) => { visualDone = n; updateProgress(); }, customPrompt);
       visualResults = visionOut?.results || visionOut;
+      visionTimings = visionOut?.timings || null;
+      visionCompletedAt = visionOut?.completedAt || null;
+      visualDone = totalVisual;
     }
+
+    // ── Wait for audio, then assign to shots ──
+    let audioResults = null, hasAudio = false;
+    let totalAudioTime = null;
+    if (audioPromise) {
+      const ft = await audioPromise;
+      if (ft) {
+        totalAudioTime = ft.timing?.totalMs || null;
+        updateJob(jobId, { logLine: `音频识别完成：${ft.sentences.length} 句，${ft.wordCount} 词` });
+        audioResults = assignToShots(ft.sentences, selectedScenes);
+        hasAudio = true;
+      } else {
+        audioResults = [];
+      }
+    }
+    updateJob(jobId, { logLine: hasAudio ? `音频识别完成` : `准备就绪` });
 
     updateJob(jobId, { logLine: `分析完成！编译结果中...` });
 
     const shots = selectedScenes.map((scene, i) => ({
-      index: startShot + i,
+      index: selectedScenes[i].index,
       startTime: scene.startTime, endTime: scene.endTime,
       duration: Math.round((scene.endTime - scene.startTime) * 100) / 100,
-      framePath: `/api/frames/${jobId}/${startShot + i}`,
-      clipPath: isVideo ? `/api/clips/${jobId}/${startShot + i}` : null,
+      framePath: `/api/frames/${jobId}/${selectedScenes[i].index}`,
+      clipPath: isVideo ? `/api/clips/${jobId}/${selectedScenes[i].index}` : null,
       description: visualResults[i] || '[无画面描述]',
       audioDescription: hasAudio && audioResults[i] ? audioResults[i] : undefined,
+      visionMs: visionTimings ? visionTimings[i] : undefined,
+      completedAt: visionCompletedAt ? visionCompletedAt[i] : undefined,
+      audioMs: totalAudioTime,
     }));
 
     updateJob(jobId, {
@@ -196,7 +246,7 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       logLine: `全部完成！共分析 ${shots.length} 个镜头`,
       results: {
         videoFile: videoName || videoPath.split(/[\\/]/).pop(),
-        totalShots: shots.length, shotRange: `${startShot + 1}-${endShot + 1}`,
+        totalShots: shots.length, shotRange: `${firstIdx}-${lastIdx}`,
         hasAudio, shots,
         mode: isVideo ? 'video' : 'image',
       },

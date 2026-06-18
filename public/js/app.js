@@ -1494,7 +1494,8 @@
         resultsMeta.parentElement.appendChild(line);
       }
       line.textContent = '视觉: ' + cfg.VISION_PROVIDER + '/' + cfg.VISION_MODEL +
-                         '    音频: ' + cfg.AUDIO_PROVIDER + '/' + cfg.AUDIO_MODEL;
+                         '    音频: ' + cfg.AUDIO_PROVIDER + '/' + cfg.AUDIO_MODEL +
+                         (r.audioMs ? ' · 台词耗时 ' + formatMs(r.audioMs) : '');
     }).catch(() => {});
 
     shotsTimeline.innerHTML = '';
@@ -1502,11 +1503,10 @@
       const card = document.createElement('div');
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
-      const isVideoMode = r.mode === 'video';
       const previewPath = '/api/preview-clips/' + currentJobId + '/' + shot.index;
-      let html = '<div class="shot-thumb' + (isVideoMode ? ' shot-thumb-video' : '') + '">' +
+      let html = '<div class="shot-thumb shot-thumb-video">' +
         '<img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy">' +
-        (isVideoMode ? '<div class="play-overlay"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></div>' : '') +
+        '<div class="play-overlay"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></div>' +
         '<span class="shot-time-badge">' + time + '</span></div>';
       html += '<div class="shot-body"><div class="shot-index">镜头 ' + (shot.index + 1) + ' . ' + formatDuration(shot.duration) + '<span class="shot-timing">视觉 ' + formatMs(shot.visionMs) + ' . 音频 ' + formatMs(shot.audioMs) + ' . ' + formatCompletedAt(shot.completedAt) + '</span></div>';
       html += '<div class="shot-section-label">画面</div><p class="shot-desc">' + escapeHtml(shot.description) + '</p>';
@@ -1517,7 +1517,7 @@
       }
       html += '</div>';
       card.innerHTML = html;
-      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, isVideoMode ? previewPath : null));
+      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, previewPath));
       shotsTimeline.appendChild(card);
 
       // Also append clean prompt to a hidden textarea for easy copy

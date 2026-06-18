@@ -263,6 +263,8 @@ function callVideoAPI(clipPath, prompt, fps = 2) {
  */
 async function describeAllVideoClips(clipData, onProgress, customPrompt) {
   const results = new Array(clipData.length);
+  const timings = new Array(clipData.length);
+  const completedAt = new Array(clipData.length);
   let done = 0;
 
   logger.info(`[vision-video] Starting ${clipData.length} video clips...`);
@@ -270,15 +272,18 @@ async function describeAllVideoClips(clipData, onProgress, customPrompt) {
   const workers = [];
   for (let i = 0; i < clipData.length; i++) {
     workers.push((async (idx) => {
+      const t0 = Date.now();
       results[idx] = await describeVideoClip(clipData[idx].path, clipData[idx].duration, customPrompt);
+      timings[idx] = Date.now() - t0;
+      completedAt[idx] = Date.now();
       done++;
-      logger.info(`[vision-video] Clip ${idx + 1}/${clipData.length}: done (${results[idx].length} chars)`);
+      logger.info(`[vision-video] Clip ${idx + 1}/${clipData.length}: done (${results[idx].length} chars, ${timings[idx]}ms)`);
       if (onProgress) onProgress(done);
     })(i));
   }
   await Promise.all(workers);
 
-  return results;
+  return { results, timings, completedAt };
 }
 
 async function describeAllFrames(framePaths, onProgress, customPrompt) {
@@ -317,6 +322,8 @@ async function describeAllFrames(framePaths, onProgress, customPrompt) {
 async function describeAllShots(shotData, onProgress, customPrompt) {
   const concurrency = parseInt(cfg('VISION_CONCURRENCY')) || 5;
   const results = new Array(shotData.length);
+  const timings = new Array(shotData.length);
+  const completedAt = new Array(shotData.length);
   let done = 0;
   let next = 0;
 
@@ -325,16 +332,19 @@ async function describeAllShots(shotData, onProgress, customPrompt) {
   const worker = async () => {
     while (next < shotData.length) {
       const i = next++;
+      const t0 = Date.now();
       const sd = shotData[i];
       results[i] = await describeShot(sd.frames, sd.duration, customPrompt);
+      timings[i] = Date.now() - t0;
+      completedAt[i] = Date.now();
       done++;
-      logger.info(`[vision] Shot ${i + 1}/${shotData.length}: done (${results[i].length} chars)`);
+      logger.info(`[vision] Shot ${i + 1}/${shotData.length}: done (${results[i].length} chars, ${timings[i]}ms)`);
       if (onProgress) onProgress(done);
     }
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, shotData.length) }, () => worker()));
-  return results;
+  return { results, timings, completedAt };
 }
 
 module.exports = { describeFrame, describeAllFrames, describeShot, describeAllShots, describeVideoClip, describeAllVideoClips };

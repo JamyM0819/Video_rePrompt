@@ -314,10 +314,17 @@ router.post('/commit-range', async (req, res) => {
   job.status = 'extracting';
   job.progress = { stage: 'extracting_frames', current: 0, total: e - s + 1 };
 
+  // Use the original Phase 1 scene boundaries (not re-detected) to keep
+  // shot → time mapping consistent between UI selection and transcription assignment
+  const selectedScenes = (job.sceneData?.shots || []).slice(s, e + 1);
+  if (selectedScenes.length === 0) {
+    return res.status(400).json({ error: '无效的镜头范围' });
+  }
+
   res.json({ jobId, status: 'extracting' });
 
   setImmediate(() => {
-    runRange(videoPath, jobId, mergeJob, s, e, job.videoName, customPrompt, minShotDuration, mode);
+    runRange(videoPath, jobId, mergeJob, selectedScenes, job.videoName, customPrompt, mode);
   });
 });
 
