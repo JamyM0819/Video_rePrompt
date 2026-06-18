@@ -9,3 +9,5 @@ outputs/
 *.mkv
 *.webm
 .bump
+packaging/
+test_upload.mp4
