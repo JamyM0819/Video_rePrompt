@@ -133,7 +133,7 @@ function formatTimestamp(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(6, '0')}`;
 }
 
-module.exports = { extractAudioSegments };
+module.exports = { extractAudioSegments, extractFullAudio };
 
 /**
  * Check audio volume levels. Returns { mean, max } in dB, or null on failure.
