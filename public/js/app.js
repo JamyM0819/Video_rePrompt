@@ -1417,7 +1417,7 @@
     rangeSelectedCount.textContent = Math.min(total, 10);
     filmstrip.innerHTML = '';
     const thumbBase = sceneData.thumbBase || '/api/frames/' + currentJobId + '/';
-    const clipBase = sceneData.clipBase || '/api/clips/' + currentJobId + '/';
+    const previewBase = sceneData.previewBase || '/api/preview-clips/' + currentJobId + '/';
     for (let i = 0; i < total; i++) {
       const item = document.createElement('div');
       item.className = 'filmstrip-item';
@@ -1445,7 +1445,7 @@
       });
       item.querySelector('.filmstrip-play-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        openLightbox(null, clipBase + i);
+        openLightbox(null, previewBase + i);
       });
       filmstrip.appendChild(item);
     }
@@ -1502,7 +1502,8 @@
       const card = document.createElement('div');
       card.className = 'shot-card';
       const time = formatTimecode(shot.startTime) + ' - ' + formatTimecode(shot.endTime);
-      const isVideoMode = r.mode === 'video' && shot.clipPath;
+      const isVideoMode = r.mode === 'video';
+      const previewPath = '/api/preview-clips/' + currentJobId + '/' + shot.index;
       let html = '<div class="shot-thumb' + (isVideoMode ? ' shot-thumb-video' : '') + '">' +
         '<img src="' + shot.framePath + '" alt="Shot ' + (shot.index + 1) + '" loading="lazy">' +
         (isVideoMode ? '<div class="play-overlay"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></div>' : '') +
@@ -1516,7 +1517,7 @@
       }
       html += '</div>';
       card.innerHTML = html;
-      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, isVideoMode ? shot.clipPath : null));
+      card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, isVideoMode ? previewPath : null));
       shotsTimeline.appendChild(card);
 
       // Also append clean prompt to a hidden textarea for easy copy

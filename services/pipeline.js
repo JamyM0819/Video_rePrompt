@@ -38,7 +38,7 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration
 
   // Extract preview video clips for each shot
   const totalShots = scenes.length;
-  const clipCount = Math.min(totalShots, 20); // cap at 20 to keep Phase 1 fast
+  const clipCount = Math.min(totalShots, 200); // safety cap only for extreme edge cases
   updateJob(jobId, { logLine: `生成 ${clipCount} 个预览视频片段...` });
   await extractPreviewClips(videoPath, scenes.slice(0, clipCount), 0, jobId, () => {});
   updateJob(jobId, { logLine: `预览片段生成完毕` });
@@ -56,6 +56,7 @@ async function detectOnly(videoPath, jobId, updateJob, maxShots, minShotDuration
       duration: duration ? Math.round(duration * 100) / 100 : null,
       thumbBase: `/api/frames/${jobId}/`,
       clipBase: `/api/clips/${jobId}/`,
+      previewBase: `/api/preview-clips/${jobId}/`,
       shots: scenes.map((s, i) => ({
         index: i,
         startTime: s.startTime,
@@ -159,7 +160,8 @@ async function runRange(videoPath, jobId, updateJob, startShot, endShot, videoNa
       updateProgress();
     }
 
-    const audioResults = hasAudio ? (await describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt)) : null;
+    const audioOut = hasAudio ? (await describeAllAudio(audioPaths, (n) => { audioDone = n; updateProgress(); }, customPrompt)) : null;
+    const audioResults = audioOut?.results || audioOut;
 
     updateJob(jobId, { logLine: `分析完成！编译结果中...` });
 

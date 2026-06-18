@@ -489,6 +489,46 @@ router.get('/clips/:jobId/:index', (req, res) => {
   }
 });
 
+// Serve preview clip (Phase 1 — low-res with audio)
+router.get('/preview-clips/:jobId/:index', (req, res) => {
+  const { jobId, index } = req.params;
+  const previewPath = path.join(config.OUTPUT_DIR, jobId, `preview_${index}.mp4`);
+
+  if (fs.existsSync(previewPath)) {
+    const stat = fs.statSync(previewPath);
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': (end - start) + 1,
+        'Content-Type': 'video/mp4',
+      });
+      fs.createReadStream(previewPath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      });
+      fs.createReadStream(previewPath).pipe(res);
+    }
+    return;
+  }
+
+  // Fallback: if no preview file, try the existing clip
+  const clipPath = path.join(config.OUTPUT_DIR, jobId, `clip_${index}.mp4`);
+  if (fs.existsSync(clipPath)) {
+    res.sendFile(path.resolve(clipPath));
+    return;
+  }
+
+  res.status(404).json({ error: 'Preview not found' });
+});
+
 // Export file — supports txt, md, html
 router.get('/export/:jobId', (req, res) => {
   const job = jobStore.get(req.params.jobId);

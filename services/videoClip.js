@@ -74,7 +74,7 @@ function formatTimestamp(seconds) {
 
 /**
  * Extract lightweight preview clips for the filmstrip (Phase 1).
- * Uses very low quality for speed — human preview only, not sent to API.
+ * Low-res video + AAC audio for human preview only, not sent to API.
  */
 async function extractPreviewClips(videoPath, scenes, startIdx, jobId, onProgress) {
   const outputDir = path.join(config.OUTPUT_DIR, jobId);
@@ -84,16 +84,16 @@ async function extractPreviewClips(videoPath, scenes, startIdx, jobId, onProgres
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     const dur = Math.max(scene.endTime - scene.startTime, 0.1);
-    const outPath = path.join(outputDir, `clip_${startIdx + i}.mp4`);
+    const outPath = path.join(outputDir, `preview_${startIdx + i}.mp4`);
 
-    // Skip if already exists (from previous Phase 2 run)
+    // Skip if already exists (from previous run)
     if (fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
       results.push({ path: outPath, duration: dur });
       if (onProgress) onProgress(i);
       continue;
     }
 
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve) => {
       const args = [
         '-ss', formatTimestamp(scene.startTime),
         '-i', videoPath,
@@ -102,7 +102,9 @@ async function extractPreviewClips(videoPath, scenes, startIdx, jobId, onProgres
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-crf', '35',
-        '-an',
+        '-c:a', 'aac',
+        '-b:a', '48k',
+        '-ac', '1',
         '-movflags', '+faststart',
         '-y',
         outPath,
@@ -118,15 +120,13 @@ async function extractPreviewClips(videoPath, scenes, startIdx, jobId, onProgres
       proc.on('close', (code) => {
         if (code === 0 && fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
           results.push({ path: outPath, duration: dur });
-          resolve();
         } else {
-          // Silent fail — preview clips are optional
           logger.warn(`[previewClip] Failed for shot ${startIdx + i}: ${stderr.slice(-100)}`);
-          resolve();
         }
+        resolve();
       });
 
-      proc.on('error', () => resolve()); // silent fail
+      proc.on('error', () => resolve());
     });
 
     if (onProgress) onProgress(i);
