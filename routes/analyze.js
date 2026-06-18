@@ -768,6 +768,7 @@ router.get('/jobs', (req, res) => {
     seen.add(id);
     jobs.push({
       jobId: id,
+      groupJobId: job.groupJobId || null,
       videoName: job.videoName || '未知',
       status: job.status,
       totalShots: job.sceneData?.totalShots || job.results?.totalShots || 0,

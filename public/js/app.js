@@ -596,6 +596,7 @@
       serverJobs.forEach(j => {
         serverMap.set(j.jobId, {
           jobId: j.jobId,
+          groupJobId: j.groupJobId || null,
           name: j.videoName || '未知视频',
           shotCount: j.totalShots || 0,
           status: j.status,
@@ -619,27 +620,58 @@
         }
       });
 
-      // Enrich stored entries with server timestamps and real-time status
+      // Group by video groupId then name — each group gets one card
+      // Enrich stored entries with server data first
       stored = stored.map(r => {
         const srv = serverMap.get(r.jobId);
-        const alive = !!srv;
-        const createdAt = srv ? srv.createdAt : (r.time || 0);
-        const mtime = srv ? srv.savedAt : (r.time || 0);
-        const status = srv ? srv.status : 'expired';
-        const shotRange = srv ? srv.shotRange : null;
-        return { ...r, alive, status, shotRange, mode: srv ? srv.mode : null, createdAt, mtime: Math.max(mtime, createdAt) };
+        return {
+          ...r,
+          alive: !!srv,
+          status: srv ? srv.status : 'expired',
+          mode: srv ? srv.mode : null,
+          createdAt: srv ? srv.createdAt : (r.time || 0),
+          mtime: srv ? srv.savedAt : (r.time || 0),
+        };
       });
 
-      // Remove dead entries (no server record) — not saving yet but filter from display
-      // Actually keep them to show "expired" status
+      const groups = new Map();
+      const getGroupKey = (srv) => (srv && srv.groupJobId) || (srv && srv.jobId);
+      stored.forEach(r => {
+        const srv = serverMap.get(r.jobId);
+        const key = getGroupKey(srv) || r.jobId;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+      });
+      // Flatten to one entry per group: pick latest (by mtime), keep all jobIds
+      const grouped = [];
+      groups.forEach((members, key) => {
+        members.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+        const latest = members[0];
+        const srv = serverMap.get(latest.jobId);
+        const runs = members.filter(m => m.alive && m.status === 'done').length;
+        const shotRanges = members.filter(m => m.alive && m.shotRange).map(m => m.shotRange);
+        const latestRange = shotRanges[0] || '';
+        const shotCount = srv ? srv.shotCount : latest.shotCount;
+        const modes = [...new Set(members.filter(m => m.mode).map(m => m.mode))]; // ['image'] | ['video'] | ['image','video']
+        grouped.push({
+          ...latest,
+          jobId: latest.jobId,
+          key,
+          runs,
+          latestRange,
+          shotCount,
+          modes,
+        });
+      });
+
       allRecents = stored;
 
-      if (stored.length === 0) {
+      if (grouped.length === 0) {
         recentAnalyses.classList.add('hidden');
         return;
       }
 
-      // Sync cleaned list back to localStorage
+      // Sync cleaned list back to localStorage (keep all alive jobIds)
       const clean = stored.filter(r => r.alive).map(r => ({
         jobId: r.jobId, name: r.name, shotCount: r.shotCount, time: r.createdAt
       }));
@@ -649,9 +681,8 @@
       recentPerPage.value = recentPerPageCount;
       recentSortMode.value = getSavedSortMode();
 
-      // Sort
       const sortMode = getSavedSortMode();
-      const sorted = stored.slice().sort((a, b) => {
+      const sorted = grouped.sort((a, b) => {
         if (sortMode === 'mtime') return (b.mtime || 0) - (a.mtime || 0);
         return (b.createdAt || 0) - (a.createdAt || 0);
       });
@@ -671,13 +702,16 @@
         card.dataset.jobId = r.jobId;
         const thumbUrl = '/api/jobs/' + r.jobId + '/thumb';
         const displayTime = getSavedSortMode() === 'added' ? r.createdAt : r.mtime;
+        const runInfo = r.runs > 1 ? ' · ' + r.runs + ' 次分析' : '';
         card.innerHTML =
           '<input type="checkbox" class="recent-delete-check"' + (manageMode ? '' : ' style="display:none"') + '>' +
           '<img class="recent-card-thumb" src="' + thumbUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
           '<div class="recent-card-body">' +
           '<div class="recent-card-name">' + escapeHtml(r.name || '未知视频') + '</div>' +
-          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头' + (r.shotRange ? '（' + r.shotRange + '）' : '') + ' · ' + formatDate(displayTime) + '</div>' +
-          (r.mode ? '<span class="mode-badge mode-badge-' + r.mode + '">' + (r.mode === 'video' ? '动态' : '单帧') + '</span>' : '') + ' ' +
+          '<div class="recent-card-meta">' + (r.shotCount || '?') + ' 个镜头 · ' + formatDate(displayTime) + runInfo + '</div>' +
+          (r.modes && r.modes.length > 0
+            ? r.modes.map(m => '<span class="mode-badge mode-badge-' + m + '">' + (m === 'video' ? '动态' : '单帧') + '</span>').join(' ')
+            : '') + ' ' +
           getStatusBadge(r.status) +
           '</div>';
         card.addEventListener('click', (e) => {
