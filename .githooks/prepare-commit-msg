@@ -1,0 +1,23 @@
+#!/bin/bash
+# prepare-commit-msg hook — auto-bump version based on .bump file
+# Write "patch", "minor", or "major" to .bump before committing.
+# Defaults to patch if .bump is missing.
+
+BMPFILE="$(git rev-parse --show-toplevel)/.bump"
+PKGFILE="$(git rev-parse --show-toplevel)/package.json"
+
+if [ -f "$BMPFILE" ]; then
+  LEVEL=$(cat "$BMPFILE" | tr -d '[:space:]')
+  rm "$BMPFILE"
+else
+  LEVEL="patch"
+fi
+
+OLDVER=$(node -e "console.log(require('$PKGFILE').version)")
+cd "$(git rev-parse --show-toplevel)"
+npm version "$LEVEL" --no-git-tag-version --silent 2>/dev/null
+NEWVER=$(node -e "console.log(require('$PKGFILE').version)")
+git add package.json
+
+echo "" >> "$1"
+echo "[v$OLDVER → v$NEWVER]" >> "$1"
