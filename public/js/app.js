@@ -38,15 +38,7 @@
 
   const rangeSection = document.getElementById('rangeSection');
   const rangeCount = document.getElementById('rangeCount');
-  const rangeStart = document.getElementById('rangeStart');
-  const rangeEnd = document.getElementById('rangeEnd');
-  const rangeFill = document.getElementById('rangeFill');
-  const rangeLabelStart = document.getElementById('rangeLabelStart');
-  const rangeLabelEnd = document.getElementById('rangeLabelEnd');
   const rangeConfirmBtn = document.getElementById('rangeConfirmBtn');
-  const rangeStartNum = document.getElementById('rangeStartNum');
-  const rangeEndNum = document.getElementById('rangeEndNum');
-  const rangeSelectedCount = document.getElementById('rangeSelectedCount');
   const filmstrip = document.getElementById('filmstrip');
 
   const resultsSection = document.getElementById('resultsSection');
@@ -1136,62 +1128,19 @@
     localStorage.setItem('minShotDuration', minShotDuration.value);
   });
 
-  // ── Range slider ──
-  function updateRangeFill() {
-    const min = parseInt(rangeStart.min), max = parseInt(rangeStart.max);
-    const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
-    const left = max > min ? ((s - min) / (max - min)) * 100 : 0;
-    const right = max > min ? ((e - min) / (max - min)) * 100 : 100;
-    rangeFill.style.left = left + '%';
-    rangeFill.style.width = (right - left) + '%';
-    rangeLabelStart.textContent = '镜头 ' + s;
-    rangeLabelEnd.textContent = '镜头 ' + e;
-    const count = e - s + 1;
+  // ── Range selection ──
+  function refreshConfirmBtn() {
     const setCount = selectedSet.size;
-    if (setCount === count) {
-      rangeConfirmBtn.textContent = '分析镜头 ' + s + ' ~ ' + e + '（共 ' + count + ' 个）';
-    } else {
-      rangeConfirmBtn.textContent = '分析 ' + setCount + ' 个镜头（' + [...selectedSet].sort((a,b)=>a-b).join(', ') + '）';
-    }
-    if (parseInt(rangeStartNum.value) !== s) rangeStartNum.value = s;
-    if (parseInt(rangeEndNum.value) !== e) rangeEndNum.value = e;
-    rangeSelectedCount.textContent = setCount;
+    rangeConfirmBtn.textContent = '分析 ' + setCount + ' 个镜头';
     updateFilmstripFromSet();
   }
-
-  function setRangeFromNums() {
-    let s = parseInt(rangeStartNum.value), e = parseInt(rangeEndNum.value);
-    const max = parseInt(rangeStart.max);
-    if (isNaN(s) || s < 1) s = 1;
-    if (isNaN(e) || e > max) e = max;
-    if (s > e) { const t = s; s = e; e = t; }
-    rangeStart.value = s; rangeEnd.value = e;
-    selectedSet.clear();
-    for (let j = s; j <= e; j++) selectedSet.add(j);
-    updateRangeFill();
-  }
-
-  rangeStart.addEventListener('input', () => {
-    const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
-    if (s >= e) rangeEnd.value = Math.min(parseInt(rangeEnd.max), s + 1);
-    updateRangeFill();
-  });
-  rangeEnd.addEventListener('input', () => {
-    const s = parseInt(rangeStart.value), e = parseInt(rangeEnd.value);
-    if (e <= s) rangeStart.value = Math.max(1, e - 1);
-    updateRangeFill();
-  });
-  rangeStartNum.addEventListener('change', setRangeFromNums);
-  rangeEndNum.addEventListener('change', setRangeFromNums);
-  rangeStartNum.addEventListener('keydown', (e) => { if (e.key === 'Enter') setRangeFromNums(); });
-  rangeEndNum.addEventListener('keydown', (e) => { if (e.key === 'Enter') setRangeFromNums(); });
 
   rangeConfirmBtn.addEventListener('click', () => {
     const sorted = [...selectedSet].sort((a, b) => a - b);
     if (sorted.length === 0) return;
     const label = sorted.length === 1
       ? '镜头 ' + sorted[0]
-      : sorted.length + ' 个镜头（' + sorted.join(', ') + '）';
+      : sorted.length + ' 个镜头';
     rangeSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
     progressLog.innerHTML = '';
@@ -1425,9 +1374,8 @@
   function showRangeSelector(sceneData) {
     const total = sceneData.totalShots;
     rangeCount.textContent = total;
-    [rangeStart, rangeStartNum].forEach(el => { el.min = 1; el.max = total; el.value = 1; });
-    [rangeEnd, rangeEndNum].forEach(el => { el.min = 1; el.max = total; el.value = Math.min(total, 10); });
-    rangeSelectedCount.textContent = Math.min(total, 10);
+    selectedSet.clear();
+    for (let j = 1; j <= Math.min(total, 10); j++) selectedSet.add(j);
     filmstrip.innerHTML = '';
     const thumbBase = sceneData.thumbBase || '/api/frames/' + currentJobId + '/';
     const previewBase = sceneData.previewBase || '/api/preview-clips/' + currentJobId + '/';
@@ -1444,31 +1392,21 @@
       item.addEventListener('click', (e) => {
         const clicked = i + 1;
         if (e.ctrlKey) {
-          // Toggle individual shot in/out of a multi-selection
           if (selectedSet.has(clicked)) {
             selectedSet.delete(clicked);
           } else {
             selectedSet.add(clicked);
           }
-          if (selectedSet.size === 0) {
-            rangeStart.value = clicked; rangeEnd.value = clicked;
-          } else {
-            const sorted = [...selectedSet].sort((a, b) => a - b);
-            rangeStart.value = sorted[0]; rangeEnd.value = sorted[sorted.length - 1];
-          }
         } else if (e.shiftKey) {
-          const curStart = parseInt(rangeStart.value);
-          rangeStart.value = Math.min(curStart, clicked);
-          rangeEnd.value = Math.max(curStart, clicked);
+          const sorted = selectedSet.size > 0 ? [...selectedSet].sort((a, b) => a - b) : [clicked];
+          const s = Math.min(sorted[0], clicked), e = Math.max(sorted[sorted.length - 1], clicked);
           selectedSet.clear();
-          for (let j = parseInt(rangeStart.value); j <= parseInt(rangeEnd.value); j++) selectedSet.add(j);
+          for (let j = s; j <= e; j++) selectedSet.add(j);
         } else {
-          rangeStart.value = clicked; rangeEnd.value = clicked;
           selectedSet.clear();
           selectedSet.add(clicked);
         }
-        updateRangeFill();
-        updateFilmstripFromSet();
+        refreshConfirmBtn();
       });
       item.querySelector('.filmstrip-thumb-img').addEventListener('dblclick', (e) => {
         e.stopPropagation();
@@ -1480,7 +1418,7 @@
       });
       filmstrip.appendChild(item);
     }
-    updateRangeFill();
+    refreshConfirmBtn();
     rangeSection.classList.remove('hidden');
     rangeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const btns = [{text:'返回首页',onClick:resetToUpload}];
@@ -1497,13 +1435,6 @@
     }).catch(() => resetToUpload());
   }
 
-  function updateFilmstrip(startIdx, endIdx) {
-    filmstrip.querySelectorAll('.filmstrip-item').forEach(item => {
-      const idx = parseInt(item.dataset.index);
-      item.classList.toggle('selected', idx >= startIdx && idx <= endIdx);
-    });
-  }
-
   function updateFilmstripFromSet() {
     filmstrip.querySelectorAll('.filmstrip-item').forEach(item => {
       const idx = parseInt(item.dataset.index);
@@ -1511,16 +1442,47 @@
     });
   }
 
+  function foldableRange(text) {
+    if (text.length <= 20) return document.createTextNode(text);
+    const span = document.createElement('span');
+    span.className = 'foldable-range';
+    span.textContent = text.slice(0, 18) + '…';
+    const arrow = document.createElement('span');
+    arrow.className = 'foldable-arrow';
+    arrow.textContent = ' ▸';
+    arrow.title = '展开全部';
+    span.appendChild(arrow);
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const existing = document.querySelector('.range-bubble');
+      if (existing) { existing.remove(); return; }
+      const bubble = document.createElement('div');
+      bubble.className = 'range-bubble';
+      bubble.textContent = text;
+      bubble.addEventListener('click', (ev) => { ev.stopPropagation(); bubble.remove(); });
+      arrow.appendChild(bubble);
+    });
+    // Close bubble on outside click
+    document.addEventListener('click', () => {
+      const b = document.querySelector('.range-bubble');
+      if (b) b.remove();
+    }, { once: true });
+    return span;
+  }
+
   function showResults(job) {
     progressSection.classList.add('hidden');
     resultsSection.classList.remove('hidden');
     const r = job.results;
     resultsTitle.textContent = r.videoFile || '分析结果';
-    resultsMeta.textContent = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
-    resultsMeta.textContent += r.hasAudio ? ' . 含台词识别' : '';
-    resultsMeta.textContent += ' . 模式: ' + (r.mode === 'video' ? '视频动态' : '单帧推演');
-    if (r.duration) resultsMeta.textContent += ' . ' + formatDuration(r.duration);
-    if (r.totalWallMs) resultsMeta.textContent += ' . 耗时 ' + (r.totalWallMs / 1000).toFixed(0) + 's';
+    const rangeText = r.shotRange ? '镜头 ' + r.shotRange + '（共 ' + r.totalShots + ' 个）' : r.totalShots + ' 个镜头';
+    resultsMeta.replaceChildren(foldableRange(rangeText));
+    const extra = [];
+    if (r.hasAudio) extra.push('含台词识别');
+    extra.push('模式: ' + (r.mode === 'video' ? '视频动态' : '单帧推演'));
+    if (r.duration) extra.push(formatDuration(r.duration));
+    if (r.totalWallMs) extra.push('耗时 ' + (r.totalWallMs / 1000).toFixed(0) + 's');
+    if (extra.length) resultsMeta.appendChild(document.createTextNode(' . ' + extra.join(' . ')));
 
     // Show active API config in subtle style
     fetch('/api/config').then(cr => cr.json()).then(cfg => {

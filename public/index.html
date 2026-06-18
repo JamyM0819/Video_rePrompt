@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=36">
+  <link rel="stylesheet" href="/css/style.css?v=37">
 </head>
 <body>
   <div class="app">
@@ -213,24 +213,7 @@
     <section id="rangeSection" class="range-section hidden">
       <div class="range-card">
         <h3>检测到 <span id="rangeCount">0</span> 个镜头</h3>
-        <p class="range-subtitle">拖拽滑块选择镜头范围 · Shift+点击缩略图选中区间 · 双击预览</p>
-        <div class="range-slider-wrap">
-          <input type="range" id="rangeStart" class="range-input" min="1" value="1">
-          <input type="range" id="rangeEnd" class="range-input" min="1" value="1">
-          <div class="range-track"></div>
-          <div class="range-fill" id="rangeFill"></div>
-        </div>
-        <div class="range-labels">
-          <span id="rangeLabelStart">镜头 1</span>
-          <span id="rangeLabelEnd">镜头 1</span>
-        </div>
-        <div class="range-input-row">
-          <label class="range-input-label">从</label>
-          <input type="number" id="rangeStartNum" class="range-num" min="1" value="1">
-          <label class="range-input-label">到</label>
-          <input type="number" id="rangeEndNum" class="range-num" min="1" value="10">
-          <span class="range-input-unit">（共 <span id="rangeSelectedCount">10</span> 个）</span>
-        </div>
+        <p class="range-subtitle">点击缩略图选择镜头 · Ctrl+点击跳跃多选 · 双击预览</p>
         <div class="range-mode-row">
           <span class="range-mode-label">分析模式：</span>
           <label class="mode-chip active" data-mode="image"><input type="radio" name="analysisMode" value="image" checked> 单帧推演</label>

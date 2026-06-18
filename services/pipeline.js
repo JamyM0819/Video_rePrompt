@@ -265,13 +265,19 @@ function buildShotRange(scenes) {
   const indices = scenes.map(s => s.index + 1).sort((a, b) => a - b);
   if (indices.length === 0) return '';
   if (indices.length === 1) return String(indices[0]);
-  // Check if contiguous
-  let contiguous = true;
+  // Compress contiguous runs: 1,3,4,5,6,7,8,9,10 → 1,3~10
+  const parts = [];
+  let start = indices[0], end = indices[0];
   for (let i = 1; i < indices.length; i++) {
-    if (indices[i] !== indices[i - 1] + 1) { contiguous = false; break; }
+    if (indices[i] === end + 1) {
+      end = indices[i];
+    } else {
+      parts.push(start === end ? String(start) : start + '~' + end);
+      start = end = indices[i];
+    }
   }
-  if (contiguous) return indices[0] + '~' + indices[indices.length - 1];
-  return indices.join(', ');
+  parts.push(start === end ? String(start) : start + '~' + end);
+  return parts.join(', ');
 }
 
 module.exports = { detectOnly, runRange };
