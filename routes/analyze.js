@@ -285,7 +285,7 @@ router.post('/analyze', (req, res, next) => {
 
 // Phase 2: user has selected a shot range, now extract + analyze
 router.post('/commit-range', async (req, res) => {
-  const { jobId, startShot, endShot, customPrompt, minShotDuration, mode } = req.body;
+  const { jobId, startShot, endShot, selectedIndices, customPrompt, minShotDuration, mode } = req.body;
 
   const job = jobStore.get(jobId);
   if (!job) {
@@ -295,9 +295,20 @@ router.post('/commit-range', async (req, res) => {
     return res.status(400).json({ error: '任务状态不正确，请重新上传' });
   }
 
-  const s = parseInt(startShot);
-  const e = parseInt(endShot);
-  if (isNaN(s) || isNaN(e) || s < 0 || e < 0 || s > e) {
+  // Accept either legacy startShot/endShot or new selectedIndices array
+  let targetIndices;
+  if (selectedIndices && Array.isArray(selectedIndices) && selectedIndices.length > 0) {
+    targetIndices = selectedIndices.filter(i => !isNaN(i) && i >= 0);
+    targetIndices.sort((a, b) => a - b);
+  } else {
+    const s = parseInt(startShot), e = parseInt(endShot);
+    if (isNaN(s) || isNaN(e) || s < 0 || e < 0 || s > e) {
+      return res.status(400).json({ error: '无效的镜头范围' });
+    }
+    targetIndices = [];
+    for (let i = s; i <= e; i++) targetIndices.push(i);
+  }
+  if (targetIndices.length === 0) {
     return res.status(400).json({ error: '无效的镜头范围' });
   }
 
@@ -312,11 +323,12 @@ router.post('/commit-range', async (req, res) => {
   }
 
   job.status = 'extracting';
-  job.progress = { stage: 'extracting_frames', current: 0, total: e - s + 1 };
+  job.progress = { stage: 'extracting_frames', current: 0, total: targetIndices.length };
 
   // Use the original Phase 1 scene boundaries (not re-detected) to keep
   // shot → time mapping consistent between UI selection and transcription assignment
-  const selectedScenes = (job.sceneData?.shots || []).slice(s, e + 1);
+  const allShots = job.sceneData?.shots || [];
+  const selectedScenes = targetIndices.map(idx => allShots[idx]).filter(Boolean);
   if (selectedScenes.length === 0) {
     return res.status(400).json({ error: '无效的镜头范围' });
   }

@@ -70,6 +70,7 @@
   let progressAnimTimer = null;
   let currentJobId = null;
   let currentJobStatus = null;
+  let selectedSet = new Set();
   let cameFromResults = false;
   let manageMode = false;
   let recentPage = 0;
@@ -1145,11 +1146,17 @@
     rangeFill.style.width = (right - left) + '%';
     rangeLabelStart.textContent = '镜头 ' + s;
     rangeLabelEnd.textContent = '镜头 ' + e;
-    rangeConfirmBtn.textContent = '分析镜头 ' + s + ' ~ ' + e + '（共 ' + (e - s + 1) + ' 个）';
+    const count = e - s + 1;
+    const setCount = selectedSet.size;
+    if (setCount === count) {
+      rangeConfirmBtn.textContent = '分析镜头 ' + s + ' ~ ' + e + '（共 ' + count + ' 个）';
+    } else {
+      rangeConfirmBtn.textContent = '分析 ' + setCount + ' 个镜头（' + [...selectedSet].sort((a,b)=>a-b).join(', ') + '）';
+    }
     if (parseInt(rangeStartNum.value) !== s) rangeStartNum.value = s;
     if (parseInt(rangeEndNum.value) !== e) rangeEndNum.value = e;
-    rangeSelectedCount.textContent = e - s + 1;
-    updateFilmstrip(s, e);
+    rangeSelectedCount.textContent = setCount;
+    updateFilmstripFromSet();
   }
 
   function setRangeFromNums() {
@@ -1159,6 +1166,8 @@
     if (isNaN(e) || e > max) e = max;
     if (s > e) { const t = s; s = e; e = t; }
     rangeStart.value = s; rangeEnd.value = e;
+    selectedSet.clear();
+    for (let j = s; j <= e; j++) selectedSet.add(j);
     updateRangeFill();
   }
 
@@ -1178,14 +1187,18 @@
   rangeEndNum.addEventListener('keydown', (e) => { if (e.key === 'Enter') setRangeFromNums(); });
 
   rangeConfirmBtn.addEventListener('click', () => {
-    const s = parseInt(rangeStart.value) - 1, e = parseInt(rangeEnd.value) - 1;
+    const sorted = [...selectedSet].sort((a, b) => a - b);
+    if (sorted.length === 0) return;
+    const label = sorted.length === 1
+      ? '镜头 ' + sorted[0]
+      : sorted.length + ' 个镜头（' + sorted.join(', ') + '）';
     rangeSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
     progressLog.innerHTML = '';
-    setProgress(0, '开始处理...', '镜头 ' + (s + 1) + ' ~ ' + (e + 1) + '（共 ' + (e - s + 1) + ' 个）');
+    setProgress(0, '开始处理...', label);
     fetch('/api/commit-range', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, startShot: s, endShot: e, customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
+      body: JSON.stringify({ jobId: currentJobId, selectedIndices: sorted.map(i => i - 1), customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
     }).then(r => r.json()).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
@@ -1427,17 +1440,35 @@
         ' onerror="this.outerHTML=\'<div style=width:120px;height:68px;display:flex;align-items:center;justify-content:center;background:var(--border);color:var(--text-secondary);font-size:0.75rem;border-radius:4px>&darr;</div>\'">' +
         '<button class="filmstrip-play-btn" title="预览视频片段"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></button>' +
         '<div class="filmstrip-item-label">镜头 ' + (i + 1) + '</div>';
+
       item.addEventListener('click', (e) => {
-        if (e.shiftKey) {
+        const clicked = i + 1;
+        if (e.ctrlKey) {
+          // Toggle individual shot in/out of a multi-selection
+          if (selectedSet.has(clicked)) {
+            selectedSet.delete(clicked);
+          } else {
+            selectedSet.add(clicked);
+          }
+          if (selectedSet.size === 0) {
+            rangeStart.value = clicked; rangeEnd.value = clicked;
+          } else {
+            const sorted = [...selectedSet].sort((a, b) => a - b);
+            rangeStart.value = sorted[0]; rangeEnd.value = sorted[sorted.length - 1];
+          }
+        } else if (e.shiftKey) {
           const curStart = parseInt(rangeStart.value);
-          const clicked = i + 1;
           rangeStart.value = Math.min(curStart, clicked);
           rangeEnd.value = Math.max(curStart, clicked);
+          selectedSet.clear();
+          for (let j = parseInt(rangeStart.value); j <= parseInt(rangeEnd.value); j++) selectedSet.add(j);
         } else {
-          rangeStart.value = i + 1;
-          rangeEnd.value = i + 1;
+          rangeStart.value = clicked; rangeEnd.value = clicked;
+          selectedSet.clear();
+          selectedSet.add(clicked);
         }
         updateRangeFill();
+        updateFilmstripFromSet();
       });
       item.querySelector('.filmstrip-thumb-img').addEventListener('dblclick', (e) => {
         e.stopPropagation();
@@ -1470,6 +1501,13 @@
     filmstrip.querySelectorAll('.filmstrip-item').forEach(item => {
       const idx = parseInt(item.dataset.index);
       item.classList.toggle('selected', idx >= startIdx && idx <= endIdx);
+    });
+  }
+
+  function updateFilmstripFromSet() {
+    filmstrip.querySelectorAll('.filmstrip-item').forEach(item => {
+      const idx = parseInt(item.dataset.index);
+      item.classList.toggle('selected', selectedSet.has(idx));
     });
   }
 

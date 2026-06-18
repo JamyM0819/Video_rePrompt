@@ -92,6 +92,7 @@ async function runRange(videoPath, jobId, updateJob, selectedScenes, videoName, 
     const outputDir = path.join(config.OUTPUT_DIR, jobId);
 
     let framePaths, visualResults, visualDone = 0;
+    let visionTimings = null, visionCompletedAt = null;
     const totalVisual = selectedScenes.length;
 
     if (isVideo) {
@@ -194,7 +195,7 @@ async function runRange(videoPath, jobId, updateJob, selectedScenes, videoName, 
     }
 
     // ── Visual analysis ──
-    let visionTimings = null, visionCompletedAt = null; const tVision = Date.now();
+    const tVision = Date.now();
     const updateProgress = () => {
       updateJob(jobId, { status: 'analyzing', progress: { stage: 'analyzing', current: visualDone, total: totalVisual } });
     };
