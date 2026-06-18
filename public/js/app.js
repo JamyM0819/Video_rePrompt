@@ -1452,6 +1452,11 @@
     arrow.textContent = ' ▸';
     arrow.title = '展开全部';
     span.appendChild(arrow);
+    function closeBubble() {
+      const b = document.querySelector('.range-bubble');
+      if (b) b.remove();
+      document.removeEventListener('click', closeBubble);
+    }
     arrow.addEventListener('click', (e) => {
       e.stopPropagation();
       const existing = document.querySelector('.range-bubble');
@@ -1459,14 +1464,10 @@
       const bubble = document.createElement('div');
       bubble.className = 'range-bubble';
       bubble.textContent = text;
-      bubble.addEventListener('click', (ev) => { ev.stopPropagation(); bubble.remove(); });
+      bubble.addEventListener('click', (ev) => { ev.stopPropagation(); closeBubble(); });
       arrow.appendChild(bubble);
+      setTimeout(() => document.addEventListener('click', closeBubble), 0);
     });
-    // Close bubble on outside click
-    document.addEventListener('click', () => {
-      const b = document.querySelector('.range-bubble');
-      if (b) b.remove();
-    }, { once: true });
     return span;
   }
 
