@@ -252,26 +252,28 @@
         </div>
         <div class="results-actions">
           <button id="copyAllBtn" class="btn-copy">复制全部描述</button>
-          <div class="export-group">
-            <select id="exportFormat" class="export-format-select">
-              <option value="txt">TXT</option>
-              <option value="md">Markdown</option>
-              <option value="html">HTML（含缩略图）</option>
-            </select>
-            <button id="exportBtn" class="btn-export">导出</button>
+          <div class="export-split-btn" id="exportSplit1">
+            <button id="exportBtn" class="btn-export-split-main">导出</button>
+            <button class="btn-export-split-arrow" title="选择格式">▾</button>
+            <div class="export-split-menu hidden">
+              <div class="export-split-item active" data-format="txt">TXT · 纯文本</div>
+              <div class="export-split-item" data-format="md">Markdown · 带标注</div>
+              <div class="export-split-item" data-format="html">HTML · 含缩略图</div>
+            </div>
           </div>
         </div>
       </div>
       <div id="shotsTimeline" class="shots-timeline"></div>
       <div class="results-footer">
         <button id="copyAllBtn2" class="btn-copy">复制全部描述</button>
-        <div class="export-group">
-          <select id="exportFormat2" class="export-format-select">
-            <option value="txt">TXT</option>
-            <option value="md">Markdown</option>
-            <option value="html">HTML（含缩略图）</option>
-          </select>
-          <button id="exportBtn2" class="btn-export">导出</button>
+        <div class="export-split-btn" id="exportSplit2">
+          <button id="exportBtn" class="btn-export-split-main" style="display:flex;align-items:center;justify-content:center;">导出</button>
+          <button class="btn-export-split-arrow" title="选择格式">▾</button>
+          <div class="export-split-menu hidden">
+            <div class="export-split-item active" data-format="txt">TXT · 纯文本</div>
+            <div class="export-split-item" data-format="md">Markdown · 带标注</div>
+            <div class="export-split-item" data-format="html">HTML · 含缩略图</div>
+          </div>
         </div>
       </div>
     </section>

@@ -1011,11 +1011,41 @@
   copyAllBtn2.addEventListener('click', copyAllDescriptions);
   exportBtn.addEventListener('click', exportToFile);
   exportBtn2.addEventListener('click', exportToFile);
-  // Sync the two format selects
-  const exportFmt = document.getElementById('exportFormat');
-  const exportFmt2 = document.getElementById('exportFormat2');
-  exportFmt.addEventListener('change', () => { exportFmt2.value = exportFmt.value; });
-  exportFmt2.addEventListener('change', () => { exportFmt.value = exportFmt2.value; });
+
+  // ── Export split button popup ──
+  let exportFormat = 'txt';
+
+  function setupExportSplit(splitId, btnId) {
+    const split = document.getElementById(splitId);
+    const btn = document.getElementById(btnId);
+    const menu = split.querySelector('.export-split-menu');
+    const arrow = split.querySelector('.btn-export-split-arrow');
+
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+
+    menu.querySelectorAll('.export-split-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportFormat = item.dataset.format;
+        // Sync across both splits
+        document.querySelectorAll('.export-split-menu').forEach(m => {
+          m.querySelectorAll('.export-split-item').forEach(i => i.classList.remove('active'));
+          m.querySelector(`[data-format="${exportFormat}"]`).classList.add('active');
+        });
+        menu.classList.add('hidden');
+      });
+    });
+
+    // Close menu on outside click
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+  }
+
+  setupExportSplit('exportSplit1', 'exportBtn');
+  setupExportSplit('exportSplit2', 'exportBtn2');
+
   clearCacheBtn.addEventListener('click', clearCache);
   retryBtn.addEventListener('click', resetToUpload);
 
@@ -1529,16 +1559,10 @@
     }).catch(() => alert('复制失败'));
   }
 
-  function getExportFormat() {
-    const sel = document.getElementById('exportFormat') || document.getElementById('exportFormat2');
-    return sel ? sel.value : 'txt';
-  }
-
   function exportToFile() {
     if (!currentJobId) return alert('任务已过期，请重新分析');
-    const format = getExportFormat();
     const link = document.createElement('a');
-    link.href = '/api/export/' + currentJobId + '?format=' + format;
+    link.href = '/api/export/' + currentJobId + '?format=' + exportFormat;
     link.download = '';
     document.body.appendChild(link);
     link.click();

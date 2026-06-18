@@ -1480,46 +1480,81 @@ body {
   background: rgba(52, 211, 153, 0.08);
 }
 
-.btn-export {
+/* Export split button */
+.export-split-btn {
+  display: inline-flex;
+  position: relative;
+}
+
+.btn-export-split-main {
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 8px 18px;
-  border-radius: var(--radius-sm);
+  padding: 8px 0 8px 16px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s;
   font-family: inherit;
+  min-width: 56px;
 }
 
-.btn-export:hover {
+.btn-export-split-main:hover {
   background: var(--accent-hover);
 }
 
-.export-group {
-  display: inline-flex;
-  gap: 0;
-}
-
-.export-format-select {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-right: none;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+.btn-export-split-arrow {
+  background: var(--accent);
+  color: rgba(255,255,255,0.7);
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.2);
   padding: 8px 10px;
-  font-size: 0.82rem;
-  font-family: inherit;
-  cursor: pointer;
-  outline: none;
-}
-
-.export-format-select:focus {
-  border-color: var(--accent);
-}
-
-.export-group .btn-export {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.btn-export-split-arrow:hover {
+  background: var(--accent-hover);
+}
+
+.export-split-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 100;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.export-split-menu.hidden {
+  display: none;
+}
+
+.export-split-item {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background 0.1s;
+}
+
+.export-split-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.export-split-item.active {
+  color: var(--accent);
+  font-weight: 500;
 }
 
 /* Timeline */
