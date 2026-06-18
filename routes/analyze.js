@@ -643,9 +643,9 @@ router.get('/export/:jobId', (req, res) => {
       } catch {}
 
       return `<div class="shot-card">
-  <div class="shot-thumb"><img src="${imgSrc}" alt="镜头 ${i+1}"><span class="shot-time">${time}</span></div>
+  <div class="shot-thumb"><img src="${imgSrc}" alt="镜头 ${shot.index+1}"><span class="shot-time">${time}</span></div>
   <div class="shot-body">
-    <h3>镜头 ${i+1} · ${(shot.duration||0).toFixed(1)}s</h3>
+    <h3>#${i+1}/镜头${shot.index+1} · ${(shot.duration||0).toFixed(1)}s</h3>
     <div class="shot-desc">${desc}</div>
     ${audio ? '<div class="shot-audio"><em>[台词]</em> ' + audio + '</div>' : ''}
   </div>
@@ -688,7 +688,7 @@ router.get('/export/:jobId', (req, res) => {
     lines.push(`> ${r.shotRange || ''} · ${r.totalShots} 个镜头 · 模式: ${r.mode === 'video' ? '视频动态' : '单帧推演'}\n`);
     (r.shots || []).forEach((shot, i) => {
       const time = `${String(Math.floor(shot.startTime/60)).padStart(2,'0')}:${String(Math.floor(shot.startTime%60)).padStart(2,'0')} - ${String(Math.floor(shot.endTime/60)).padStart(2,'0')}:${String(Math.floor(shot.endTime%60)).padStart(2,'0')}`;
-      lines.push(`## 镜头 ${i+1} \`${time}\`\n`);
+      lines.push(`## #${i+1}/镜头${shot.index+1} \`${time}\`\n`);
       lines.push('![缩略图](' + shot.framePath + ')\n');
       if (shot.description) lines.push(shot.description + '\n');
       if (shot.audioDescription) lines.push('\n**[台词]** ' + shot.audioDescription + '\n');
@@ -701,7 +701,7 @@ router.get('/export/:jobId', (req, res) => {
     const lines = [];
     (r.shots || []).forEach((shot, i) => {
       const time = `${String(Math.floor(shot.startTime/60)).padStart(2,'0')}:${String(Math.floor(shot.startTime%60)).padStart(2,'0')}-${String(Math.floor(shot.endTime/60)).padStart(2,'0')}:${String(Math.floor(shot.endTime%60)).padStart(2,'0')}`;
-      lines.push(`── 镜头 ${i+1} · ${time} · ${(shot.duration||0).toFixed(1)}s ──`);
+      lines.push(`── #${i+1}/镜头${shot.index+1} · ${time} · ${(shot.duration||0).toFixed(1)}s ──`);
       lines.push('');
       if (shot.description) lines.push(shot.description);
       if (shot.audioDescription) lines.push('\n[台词] ' + shot.audioDescription);
