@@ -1,3 +1,4 @@
+logs/
 node_modules/
 uploads/
 outputs/
@@ -7,3 +8,4 @@ outputs/
 *.avi
 *.mkv
 *.webm
+.bump
