@@ -60,8 +60,8 @@ function mergeJob(jobId, partial) {
     delete partial.logLine;
   }
   Object.assign(current, partial);
-  // Persist to disk when done
-  if (current.status === 'done' && current.results) {
+  // Persist when awaiting_range (scene detection done) or done (analysis done)
+  if ((current.status === 'awaiting_range' || current.status === 'done') && current.sceneData) {
     current.savedAt = Date.now();
     saveJobToDisk(current);
   }
@@ -74,11 +74,12 @@ function saveJobToDisk(job) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const data = {
       jobId: job.jobId,
+      groupJobId: job.groupJobId || null,
       videoName: job.videoName,
-      status: 'done',
-      results: job.results,
-      sceneData: job.sceneData,
-      log: job.log,
+      status: job.status,
+      results: job.results || null,
+      sceneData: job.sceneData || null,
+      log: job.log || [],
       createdAt: job.createdAt,
       savedAt: Date.now(),
     };
@@ -340,6 +341,51 @@ router.post('/commit-range', async (req, res) => {
   });
 });
 
+// Clone an existing job to a new jobId (video + sceneData, not results)
+router.post('/clone-job/:jobId', (req, res) => {
+  const src = jobStore.get(req.params.jobId);
+  if (!src) return res.status(404).json({ error: '源任务不存在' });
+
+  const newId = uuidv4();
+
+  const copyDir = (s, d) => {
+    if (!fs.existsSync(s)) return;
+    fs.mkdirSync(d, { recursive: true });
+    fs.readdirSync(s).forEach(f => {
+      const sp = path.join(s, f), dp = path.join(d, f);
+      if (fs.statSync(sp).isFile()) fs.copyFileSync(sp, dp);
+    });
+  };
+  copyDir(path.join(config.UPLOAD_DIR, req.params.jobId), path.join(config.UPLOAD_DIR, newId));
+  copyDir(path.join(config.OUTPUT_DIR, req.params.jobId), path.join(config.OUTPUT_DIR, newId));
+
+  if (!fs.existsSync(path.join(config.UPLOAD_DIR, newId)) || fs.readdirSync(path.join(config.UPLOAD_DIR, newId)).length === 0) {
+    return res.status(500).json({ error: '克隆视频文件失败' });
+  }
+
+  // Set up group tracking: all analyses of the same video share a groupJobId
+  const groupId = src.groupJobId || src.jobId;
+  if (!src.groupJobId) { src.groupJobId = src.jobId; }
+
+  const clone = {
+    jobId: newId,
+    groupJobId: groupId,
+    status: 'awaiting_range',
+    progress: { stage: 'awaiting_range' },
+    results: null,
+    error: null,
+    createdAt: Date.now(),
+    videoName: src.videoName,
+    sceneData: src.sceneData ? { ...JSON.parse(JSON.stringify(src.sceneData)),
+      thumbBase: `/api/frames/${newId}/`,
+      clipBase: `/api/clips/${newId}/`,
+      previewBase: `/api/preview-clips/${newId}/`,
+    } : null,
+  };
+  jobStore.set(newId, clone);
+  res.json({ jobId: newId });
+});
+
 // Analyze from URL: download video, then detect scenes, wait for range
 router.post('/analyze-url', async (req, res) => {
   const { url, maxShots: _ms, minShotDuration } = req.body;
@@ -394,6 +440,27 @@ router.post('/analyze-url', async (req, res) => {
       jobStore.get(jobId).error = 'Download failed: ' + err.message;
     }
   });
+});
+
+// Get sibling analyses of the same video
+router.get('/jobs/:jobId/siblings', (req, res) => {
+  const job = jobStore.get(req.params.jobId);
+  if (!job) return res.json({ siblings: [], pos: 0 });
+  const groupId = job.groupJobId || job.jobId;
+  const siblings = [];
+  jobStore.forEach(j => {
+    const gid = j.groupJobId || j.jobId;
+    if (gid === groupId && j.results) {
+      siblings.push({
+        jobId: j.jobId,
+        shotRange: j.results.shotRange || '',
+        mode: j.results.mode || 'image',
+      });
+    }
+  });
+  siblings.sort((a, b) => a.jobId.localeCompare(b.jobId));
+  const pos = siblings.findIndex(s => s.jobId === req.params.jobId);
+  res.json({ siblings, pos: pos >= 0 ? pos : 0 });
 });
 
 // Get job status/results

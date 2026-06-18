@@ -1355,6 +1355,40 @@ body {
 }
 @keyframes bubbleIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* Results page pagination */
+.page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 0;
+}
+.page-nav-btn {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 5px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s, color 0.2s;
+}
+.page-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.page-nav-btn.disabled {
+  color: var(--text-secondary);
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+.page-nav-pos {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.results-top-pager:empty, .results-bottom-pager:empty { display: none; }
+.results-bottom-pager { margin-top: 20px; }
+
 .btn-copy {
   background: var(--surface);
   color: var(--text);

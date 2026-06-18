@@ -45,6 +45,8 @@
   const resultsTitle = document.getElementById('resultsTitle');
   const resultsMeta = document.getElementById('resultsMeta');
   const shotsTimeline = document.getElementById('shotsTimeline');
+  const resultsTopPager = document.getElementById('resultsTopPager');
+  const resultsBottomPager = document.getElementById('resultsBottomPager');
   const copyAllBtn = document.getElementById('copyAllBtn');
   const exportBtn = document.getElementById('exportBtn');
   const headerToolbar = document.getElementById('headerToolbar');
@@ -1135,7 +1137,7 @@
     updateFilmstripFromSet();
   }
 
-  rangeConfirmBtn.addEventListener('click', () => {
+  rangeConfirmBtn.addEventListener('click', async () => {
     const sorted = [...selectedSet].sort((a, b) => a - b);
     if (sorted.length === 0) return;
     const label = sorted.length === 1
@@ -1145,10 +1147,23 @@
     progressSection.classList.remove('hidden');
     progressLog.innerHTML = '';
     setProgress(0, '开始处理...', label);
-    fetch('/api/commit-range', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: currentJobId, selectedIndices: sorted.map(i => i - 1), customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
-    }).then(r => r.json()).then(data => {
+    const doCommit = async (jid) => {
+      const res = await fetch('/api/commit-range', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: jid, selectedIndices: sorted.map(i => i - 1), customPrompt: getPromptHistory().join('\n'), minShotDuration: parseFloat(document.getElementById('minShotDuration').value) || 1.0, mode: document.querySelector('input[name="analysisMode"]:checked').value }),
+      });
+      return res.json();
+    };
+
+    // If re-analyzing from results, clone first so original results are preserved
+    if (cameFromResults) {
+      const cloneRes = await fetch('/api/clone-job/' + currentJobId, { method: 'POST' }).then(r => r.json());
+      if (!cloneRes.jobId) { showError('克隆任务失败'); return; }
+      currentJobId = cloneRes.jobId;
+      addToHistory(currentJobId);
+    }
+
+    doCommit(currentJobId).then(data => {
       if (data.error) { showError(data.error); return; }
       saveSession(currentJobId, 'extracting');
       setToolbar([{text:'返回首页',onClick:resetToUpload}]);
@@ -1542,6 +1557,40 @@
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setToolbar([{text:'分析其他镜头',onClick:backToRange},{text:'分析新视频',primary:true,onClick:resetToUpload}]);
     if (r) saveRecent(job.jobId, r.videoFile || '未知', r.totalShots);
+    fetch('/api/jobs/' + currentJobId + '/siblings').then(rs => rs.json()).then(sr => renderPagers(sr.siblings, sr.pos));
+  }
+
+  function renderPagers(siblings, pos) {
+    if (!siblings || siblings.length <= 1) {
+      resultsTopPager.innerHTML = resultsBottomPager.innerHTML = '';
+      return;
+    }
+    const prev = pos > 0 ? siblings[pos - 1] : null;
+    const next = pos < siblings.length - 1 ? siblings[pos + 1] : null;
+    const html = (() => {
+      let h = '<div class="page-nav">';
+      h += prev
+        ? '<button class="page-nav-btn" data-goto="' + prev.jobId + '">◂ ' + (prev.shotRange || '?') + '</button>'
+        : '<span class="page-nav-btn disabled">◂ 无</span>';
+      h += '<span class="page-nav-pos">' + (pos + 1) + ' / ' + siblings.length + '</span>';
+      h += next
+        ? '<button class="page-nav-btn" data-goto="' + next.jobId + '">' + (next.shotRange || '?') + ' ▸</button>'
+        : '<span class="page-nav-btn disabled">无 ▸</span>';
+      h += '</div>';
+      return h;
+    })();
+    resultsTopPager.innerHTML = resultsBottomPager.innerHTML = html;
+    [resultsTopPager, resultsBottomPager].forEach(el => {
+      el.querySelectorAll('.page-nav-btn[data-goto]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const jid = btn.dataset.goto;
+          currentJobId = jid;
+          fetch('/api/jobs/' + jid).then(r => r.json()).then(job => {
+            if (job.results) showResults(job);
+          });
+        });
+      });
+    });
   }
 
   function backToRange() {
