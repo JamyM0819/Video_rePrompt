@@ -1496,6 +1496,32 @@ body {
   background: var(--accent-hover);
 }
 
+.export-group {
+  display: inline-flex;
+  gap: 0;
+}
+
+.export-format-select {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.export-format-select:focus {
+  border-color: var(--accent);
+}
+
+.export-group .btn-export {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
 /* Timeline */
 .shots-timeline {
   display: flex;

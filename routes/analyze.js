@@ -489,28 +489,109 @@ router.get('/clips/:jobId/:index', (req, res) => {
   }
 });
 
-// Export markdown file (solves CJK filename encoding with blob downloads)
+// Export file — supports txt, md, html
 router.get('/export/:jobId', (req, res) => {
   const job = jobStore.get(req.params.jobId);
   if (!job || !job.results) return res.status(404).json({ error: '任务不存在' });
 
   const r = job.results;
+  const format = req.query.format || 'txt';
   const videoName = (job.videoName || job.results.videoFile || 'video').replace(/\.\w{2,5}$/, '').slice(0, 20);
 
-  const lines = [];
-  (r.shots || []).forEach((shot, i) => {
-    if (shot.description) lines.push(shot.description);
-    if (shot.audioDescription) lines.push('\n[台词] ' + shot.audioDescription);
-    if (i < r.shots.length - 1) lines.push('');
-  });
+  let content, contentType, ext;
 
-  const content = '﻿' + lines.join('\n');
-  const filename = encodeURIComponent(videoName + '_提示词.txt');
+  if (format === 'html') {
+    const shotCards = (r.shots || []).map((shot, i) => {
+      const desc = (shot.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const audio = shot.audioDescription ? shot.audioDescription.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+      const time = `${String(Math.floor(shot.startTime/60)).padStart(2,'0')}:${String(Math.floor(shot.startTime%60)).padStart(2,'0')} - ${String(Math.floor(shot.endTime/60)).padStart(2,'0')}:${String(Math.floor(shot.endTime%60)).padStart(2,'0')}`;
 
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      // Embed thumbnail as base64 data URI for offline portability
+      let imgSrc = shot.framePath; // fallback
+      try {
+        const frameFile = path.join(config.OUTPUT_DIR, job.jobId, `frame_${shot.index}.jpg`);
+        if (fs.existsSync(frameFile)) {
+          const imgData = fs.readFileSync(frameFile);
+          imgSrc = `data:image/jpeg;base64,${imgData.toString('base64')}`;
+        }
+      } catch {}
+
+      return `<div class="shot-card">
+  <div class="shot-thumb"><img src="${imgSrc}" alt="镜头 ${i+1}"><span class="shot-time">${time}</span></div>
+  <div class="shot-body">
+    <h3>镜头 ${i+1} · ${(shot.duration||0).toFixed(1)}s</h3>
+    <div class="shot-desc">${desc}</div>
+    ${audio ? '<div class="shot-audio"><em>[台词]</em> ' + audio + '</div>' : ''}
+  </div>
+</div>`;
+    }).join('\n');
+
+    content = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtmlForExport(videoName)} — 镜头提示词</title>
+<style>
+  body { font-family: -apple-system, 'Noto Sans SC', sans-serif; background: #111; color: #e0e0e0; padding: 40px 20px; margin: 0; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; color: #fff; }
+  .meta { color: #888; font-size: 0.85rem; margin-bottom: 32px; }
+  .shot-card { display: flex; gap: 20px; margin-bottom: 32px; padding: 20px; background: #1a1a1a; border-radius: 10px; border: 1px solid #2a2a2a; }
+  .shot-thumb { position: relative; flex-shrink: 0; width: 200px; height: 112px; border-radius: 6px; overflow: hidden; }
+  .shot-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .shot-time { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.7); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+  .shot-body { flex: 1; min-width: 0; }
+  .shot-body h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; }
+  .shot-desc { font-size: 0.9rem; line-height: 1.7; color: #e0e0e0; }
+  .shot-audio { margin-top: 10px; font-size: 0.85rem; color: #9b9; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>${escapeHtmlForExport(videoName)}</h1>
+  <p class="meta">${r.shotRange || ''} · ${r.totalShots} 个镜头 · 模式: ${r.mode === 'video' ? '视频动态' : '单帧推演'}</p>
+  ${shotCards}
+</div>
+</body>
+</html>`;
+    contentType = 'text/html; charset=utf-8';
+    ext = '.html';
+  } else if (format === 'md') {
+    const lines = ['# ' + videoName + ' 镜头分析\n'];
+    lines.push(`> ${r.shotRange || ''} · ${r.totalShots} 个镜头 · 模式: ${r.mode === 'video' ? '视频动态' : '单帧推演'}\n`);
+    (r.shots || []).forEach((shot, i) => {
+      const time = `${String(Math.floor(shot.startTime/60)).padStart(2,'0')}:${String(Math.floor(shot.startTime%60)).padStart(2,'0')} - ${String(Math.floor(shot.endTime/60)).padStart(2,'0')}:${String(Math.floor(shot.endTime%60)).padStart(2,'0')}`;
+      lines.push(`## 镜头 ${i+1} \`${time}\`\n`);
+      lines.push('![缩略图](' + shot.framePath + ')\n');
+      if (shot.description) lines.push(shot.description + '\n');
+      if (shot.audioDescription) lines.push('\n**[台词]** ' + shot.audioDescription + '\n');
+      lines.push('---\n');
+    });
+    content = '﻿' + lines.join('\n');
+    contentType = 'text/markdown; charset=utf-8';
+    ext = '.md';
+  } else {
+    const lines = [];
+    (r.shots || []).forEach((shot, i) => {
+      if (shot.description) lines.push(shot.description);
+      if (shot.audioDescription) lines.push('\n[台词] ' + shot.audioDescription);
+      if (i < r.shots.length - 1) lines.push('');
+    });
+    content = '﻿' + lines.join('\n');
+    contentType = 'text/plain; charset=utf-8';
+    ext = '.txt';
+  }
+
+  const filename = encodeURIComponent(videoName + '_提示词' + ext);
+  res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
   res.send(Buffer.from(content, 'utf-8'));
 });
+
+function escapeHtmlForExport(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 // Re-extract all frame thumbnails for a job (for when frames are missing)
 router.post('/re-extract-frames/:jobId', async (req, res) => {

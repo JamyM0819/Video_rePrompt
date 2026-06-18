@@ -1011,6 +1011,11 @@
   copyAllBtn2.addEventListener('click', copyAllDescriptions);
   exportBtn.addEventListener('click', exportToFile);
   exportBtn2.addEventListener('click', exportToFile);
+  // Sync the two format selects
+  const exportFmt = document.getElementById('exportFormat');
+  const exportFmt2 = document.getElementById('exportFormat2');
+  exportFmt.addEventListener('change', () => { exportFmt2.value = exportFmt.value; });
+  exportFmt2.addEventListener('change', () => { exportFmt.value = exportFmt2.value; });
   clearCacheBtn.addEventListener('click', clearCache);
   retryBtn.addEventListener('click', resetToUpload);
 
@@ -1524,10 +1529,16 @@
     }).catch(() => alert('复制失败'));
   }
 
+  function getExportFormat() {
+    const sel = document.getElementById('exportFormat') || document.getElementById('exportFormat2');
+    return sel ? sel.value : 'txt';
+  }
+
   function exportToFile() {
     if (!currentJobId) return alert('任务已过期，请重新分析');
+    const format = getExportFormat();
     const link = document.createElement('a');
-    link.href = '/api/export/' + currentJobId;
+    link.href = '/api/export/' + currentJobId + '?format=' + format;
     link.download = '';
     document.body.appendChild(link);
     link.click();

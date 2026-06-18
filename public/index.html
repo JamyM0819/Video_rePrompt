@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=27">
+  <link rel="stylesheet" href="/css/style.css?v=28">
 </head>
 <body>
   <div class="app">
@@ -252,13 +252,27 @@
         </div>
         <div class="results-actions">
           <button id="copyAllBtn" class="btn-copy">复制全部描述</button>
-          <button id="exportBtn" class="btn-export">导出为文件</button>
+          <div class="export-group">
+            <select id="exportFormat" class="export-format-select">
+              <option value="txt">TXT</option>
+              <option value="md">Markdown</option>
+              <option value="html">HTML（含缩略图）</option>
+            </select>
+            <button id="exportBtn" class="btn-export">导出</button>
+          </div>
         </div>
       </div>
       <div id="shotsTimeline" class="shots-timeline"></div>
       <div class="results-footer">
         <button id="copyAllBtn2" class="btn-copy">复制全部描述</button>
-        <button id="exportBtn2" class="btn-export">导出为文件</button>
+        <div class="export-group">
+          <select id="exportFormat2" class="export-format-select">
+            <option value="txt">TXT</option>
+            <option value="md">Markdown</option>
+            <option value="html">HTML（含缩略图）</option>
+          </select>
+          <button id="exportBtn2" class="btn-export">导出</button>
+        </div>
       </div>
     </section>
 
@@ -299,6 +313,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=27"></script>
+  <script src="/js/app.js?v=28"></script>
 </body>
 </html>
