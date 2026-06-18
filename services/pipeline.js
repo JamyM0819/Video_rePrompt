@@ -85,9 +85,6 @@ async function runRange(videoPath, jobId, updateJob, selectedScenes, videoName, 
   try {
     const selectedTotal = selectedScenes.length;
     if (selectedTotal === 0) throw new Error('No scenes selected');
-    const firstIdx = selectedScenes[0].index;
-    const lastIdx = selectedScenes[selectedTotal - 1].index;
-    updateJob(jobId, { logLine: `开始处理镜头 ${firstIdx} ~ ${lastIdx}（共 ${selectedTotal} 个）...` });
 
     const outputDir = path.join(config.OUTPUT_DIR, jobId);
 
@@ -247,7 +244,7 @@ async function runRange(videoPath, jobId, updateJob, selectedScenes, videoName, 
       logLine: `全部完成！共分析 ${shots.length} 个镜头`,
       results: {
         videoFile: videoName || videoPath.split(/[\\/]/).pop(),
-        totalShots: shots.length, shotRange: `${firstIdx}-${lastIdx}`,
+        totalShots: shots.length, shotRange: buildShotRange(selectedScenes),
         hasAudio, shots,
         mode: isVideo ? 'video' : 'image',
       },
@@ -262,6 +259,19 @@ function formatDuration(s) {
   if (!s || isNaN(s)) return '?';
   if (s < 60) return Math.round(s) + '秒';
   return Math.floor(s / 60) + '分' + Math.round(s % 60) + '秒';
+}
+
+function buildShotRange(scenes) {
+  const indices = scenes.map(s => s.index + 1).sort((a, b) => a - b);
+  if (indices.length === 0) return '';
+  if (indices.length === 1) return String(indices[0]);
+  // Check if contiguous
+  let contiguous = true;
+  for (let i = 1; i < indices.length; i++) {
+    if (indices[i] !== indices[i - 1] + 1) { contiguous = false; break; }
+  }
+  if (contiguous) return indices[0] + '~' + indices[indices.length - 1];
+  return indices.join(', ');
 }
 
 module.exports = { detectOnly, runRange };
