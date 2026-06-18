@@ -1465,6 +1465,24 @@
       card.innerHTML = html;
       card.querySelector('.shot-thumb').addEventListener('click', () => openLightbox(shot.framePath, isVideoMode ? shot.clipPath : null));
       shotsTimeline.appendChild(card);
+
+      // Also append clean prompt to a hidden textarea for easy copy
+      const clean = document.createElement('textarea');
+      clean.className = 'shot-clean-prompt';
+      clean.readOnly = true;
+      clean.value = shot.description +
+        (shot.audioDescription ? '\n\n[台词] ' + shot.audioDescription : '');
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'shot-copy-btn';
+      copyBtn.textContent = '复制提示词';
+      copyBtn.addEventListener('click', () => {
+        clean.select();
+        document.execCommand('copy');
+        copyBtn.textContent = '已复制'; copyBtn.classList.add('copied');
+        setTimeout(() => { copyBtn.textContent = '复制提示词'; copyBtn.classList.remove('copied'); }, 1500);
+      });
+      card.querySelector('.shot-body').appendChild(clean);
+      card.querySelector('.shot-body').appendChild(copyBtn);
     });
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setToolbar([{text:'分析其他镜头',onClick:backToRange},{text:'分析新视频',primary:true,onClick:resetToUpload}]);
@@ -1496,9 +1514,9 @@
 
   function copyAllDescriptions() {
     const lines = [].slice.call(shotsTimeline.querySelectorAll('.shot-card')).map(card => {
-      const t = card.querySelector('.shot-time-badge'), d = card.querySelector('.shot-desc'), a = card.querySelector('.shot-audio-desc');
-      let text = '[' + (t ? t.textContent : '') + ']\n' + (d ? d.textContent : '');
-      if (a) text += '\n[台词] ' + a.textContent;
+      const d = card.querySelector('.shot-desc'), a = card.querySelector('.shot-audio-desc');
+      let text = d ? d.textContent : '';
+      if (a && a.textContent !== '无台词') text += '\n\n[台词] ' + a.textContent;
       return text;
     });
     navigator.clipboard.writeText(lines.join('\n\n')).then(() => {

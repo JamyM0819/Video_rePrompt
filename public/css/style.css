@@ -1596,6 +1596,38 @@ body {
   color: var(--text);
 }
 
+.shot-clean-prompt {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.shot-copy-btn {
+  display: inline-block;
+  margin-top: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.shot-copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shot-copy-btn.copied {
+  border-color: var(--success);
+  color: var(--success);
+}
+
 .shot-section-label {
   font-size: 0.75rem;
   font-weight: 600;

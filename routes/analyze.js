@@ -497,21 +497,17 @@ router.get('/export/:jobId', (req, res) => {
   const r = job.results;
   const videoName = (job.videoName || job.results.videoFile || 'video').replace(/\.\w{2,5}$/, '').slice(0, 20);
 
-  const lines = ['# 视频镜头分析报告\n'];
-  lines.push(`> 共 ${r.totalShots} 个镜头\n`);
+  const lines = [];
   (r.shots || []).forEach((shot, i) => {
-    const t0 = shot.startTime, t1 = shot.endTime;
-    const tc = `${String(Math.floor(t0/60)).padStart(2,'0')}:${String(Math.floor(t0%60)).padStart(2,'0')} - ${String(Math.floor(t1/60)).padStart(2,'0')}:${String(Math.floor(t1%60)).padStart(2,'0')}`;
-    lines.push('## 镜头 ' + (i + 1) + '  `' + tc + '`\n');
-    lines.push('### 画面\n' + (shot.description || '') + '\n');
-    if (shot.audioDescription) lines.push('### 台词\n' + shot.audioDescription + '\n');
-    lines.push('---\n');
+    if (shot.description) lines.push(shot.description);
+    if (shot.audioDescription) lines.push('\n[台词] ' + shot.audioDescription);
+    if (i < r.shots.length - 1) lines.push('');
   });
 
   const content = '﻿' + lines.join('\n');
-  const filename = encodeURIComponent(videoName + '_分析.md');
+  const filename = encodeURIComponent(videoName + '_提示词.txt');
 
-  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
   res.send(Buffer.from(content, 'utf-8'));
 });
