@@ -54,9 +54,7 @@
   const resultsMeta = document.getElementById('resultsMeta');
   const shotsTimeline = document.getElementById('shotsTimeline');
   const copyAllBtn = document.getElementById('copyAllBtn');
-  const copyAllBtn2 = document.getElementById('copyAllBtn2');
   const exportBtn = document.getElementById('exportBtn');
-  const exportBtn2 = document.getElementById('exportBtn2');
   const headerToolbar = document.getElementById('headerToolbar');
 
   const errorSection = document.getElementById('errorSection');
@@ -1006,45 +1004,65 @@
   urlSubmitBtn.addEventListener('click', handleUrlSubmit);
   urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleUrlSubmit(); });
 
-  // ── Buttons ──
+  // ── Export split button ──
+  window.__exportFormat = 'txt';
+
+  // Floating FAB — show when results section is visible and user scrolls past it
+  var exportFab = document.getElementById('exportFab');
+  window.addEventListener('scroll', function() {
+    if (!resultsSection.classList.contains('hidden')) {
+      var rect = resultsSection.getBoundingClientRect();
+      // Show FAB when results header is above viewport
+      exportFab.style.display = rect.top < 0 ? 'inline-flex' : 'none';
+    } else {
+      exportFab.style.display = 'none';
+    }
+  });
+
+  window.toggleExportMenu = function(arrow, e) {
+    e.stopPropagation();
+    var popup = arrow.parentElement.querySelector('.export-format-popup');
+    var wasHidden = popup.classList.contains('hidden');
+    // close all popups
+    document.querySelectorAll('.export-format-popup').forEach(function(p) { p.classList.add('hidden'); });
+    if (wasHidden) popup.classList.remove('hidden');
+  };
+
+  window.pickExportFormat = function(e) {
+    var item = e.target.closest('.export-format-item');
+    if (!item) return;
+    e.stopPropagation();
+    window.__exportFormat = item.dataset.format;
+    document.querySelectorAll('.export-format-popup').forEach(function(popup) {
+      popup.querySelectorAll('.export-format-item').forEach(function(i) { i.classList.remove('active'); });
+      var t = popup.querySelector('[data-format="' + window.__exportFormat + '"]');
+      if (t) t.classList.add('active');
+      popup.classList.add('hidden');
+    });
+    // Immediate download
+    window.doExport();
+  };
+
+  window.doExport = function() {
+    if (!currentJobId) { alert('任务已过期，请重新分析'); return; }
+    var link = document.createElement('a');
+    link.href = '/api/export/' + currentJobId + '?format=' + window.__exportFormat;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  document.addEventListener('click', function(e) {
+    // Close popup only if click is outside any export-split-btn
+    if (!e.target.closest('.export-split-btn')) {
+      document.querySelectorAll('.export-format-popup').forEach(function(p) { p.classList.add('hidden'); });
+    }
+  });
+
   copyAllBtn.addEventListener('click', copyAllDescriptions);
-  copyAllBtn2.addEventListener('click', copyAllDescriptions);
-  exportBtn.addEventListener('click', exportToFile);
-  exportBtn2.addEventListener('click', exportToFile);
-
-  // ── Export split button popup ──
-  let exportFormat = 'txt';
-
-  function setupExportSplit(splitId, btnId) {
-    const split = document.getElementById(splitId);
-    const btn = document.getElementById(btnId);
-    const menu = split.querySelector('.export-split-menu');
-    const arrow = split.querySelector('.btn-export-split-arrow');
-
-    arrow.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.classList.toggle('hidden');
-    });
-
-    menu.querySelectorAll('.export-split-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        exportFormat = item.dataset.format;
-        // Sync across both splits
-        document.querySelectorAll('.export-split-menu').forEach(m => {
-          m.querySelectorAll('.export-split-item').forEach(i => i.classList.remove('active'));
-          m.querySelector(`[data-format="${exportFormat}"]`).classList.add('active');
-        });
-        menu.classList.add('hidden');
-      });
-    });
-
-    // Close menu on outside click
-    document.addEventListener('click', () => menu.classList.add('hidden'));
-  }
-
-  setupExportSplit('exportSplit1', 'exportBtn');
-  setupExportSplit('exportSplit2', 'exportBtn2');
+  clearCacheBtn.addEventListener('click', clearCache);
+  retryBtn.addEventListener('click', resetToUpload);
 
   clearCacheBtn.addEventListener('click', clearCache);
   retryBtn.addEventListener('click', resetToUpload);
@@ -1555,18 +1573,9 @@
       return text;
     });
     navigator.clipboard.writeText(lines.join('\n\n')).then(() => {
-      [copyAllBtn, copyAllBtn2].forEach(b => { b.textContent = '已复制！'; b.classList.add('copied'); setTimeout(() => { b.textContent = '复制全部描述'; b.classList.remove('copied'); }, 2000); });
+      copyAllBtn.textContent = '已复制！'; copyAllBtn.classList.add('copied');
+      setTimeout(() => { copyAllBtn.textContent = '复制全部描述'; copyAllBtn.classList.remove('copied'); }, 2000);
     }).catch(() => alert('复制失败'));
-  }
-
-  function exportToFile() {
-    if (!currentJobId) return alert('任务已过期，请重新分析');
-    const link = document.createElement('a');
-    link.href = '/api/export/' + currentJobId + '?format=' + exportFormat;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   }
 
   function clearCache() {

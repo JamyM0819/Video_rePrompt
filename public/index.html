@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video rePrompt — 视频反推镜头提示词</title>
-  <link rel="stylesheet" href="/css/style.css?v=28">
+  <link rel="stylesheet" href="/css/style.css?v=35">
 </head>
 <body>
   <div class="app">
@@ -243,6 +243,18 @@
       </div>
     </section>
 
+<div class="export-split-btn export-fab" id="exportFab">
+      <button class="btn-export-split-main" onclick="doExport()">导出</button>
+      <button class="btn-export-split-arrow" onclick="toggleExportMenu(this,event)" title="选择格式">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="export-format-popup hidden" onclick="pickExportFormat(event)" style="right:auto;left:0;top:auto;bottom:100%;margin-top:0;margin-bottom:4px">
+        <div class="export-format-item active" data-format="txt">TXT · 纯文本</div>
+        <div class="export-format-item" data-format="md">Markdown · 带标注</div>
+        <div class="export-format-item" data-format="html">HTML · 含缩略图</div>
+      </div>
+    </div>
+
     <!-- Results Section -->
     <section id="resultsSection" class="results-section hidden">
       <div class="results-header">
@@ -252,30 +264,21 @@
         </div>
         <div class="results-actions">
           <button id="copyAllBtn" class="btn-copy">复制全部描述</button>
-          <div class="export-split-btn" id="exportSplit1">
-            <button id="exportBtn" class="btn-export-split-main">导出</button>
-            <button class="btn-export-split-arrow" title="选择格式">▾</button>
-            <div class="export-split-menu hidden">
-              <div class="export-split-item active" data-format="txt">TXT · 纯文本</div>
-              <div class="export-split-item" data-format="md">Markdown · 带标注</div>
-              <div class="export-split-item" data-format="html">HTML · 含缩略图</div>
+          <div class="export-split-btn">
+            <button id="exportBtn" class="btn-export-split-main" onclick="doExport()">导出</button>
+            <button class="btn-export-split-arrow" onclick="toggleExportMenu(this,event)" title="选择格式">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="export-format-popup hidden" onclick="pickExportFormat(event)">
+              <div class="export-format-item active" data-format="txt">TXT · 纯文本</div>
+              <div class="export-format-item" data-format="md">Markdown · 带标注</div>
+              <div class="export-format-item" data-format="html">HTML · 含缩略图</div>
             </div>
+          </div>
           </div>
         </div>
       </div>
       <div id="shotsTimeline" class="shots-timeline"></div>
-      <div class="results-footer">
-        <button id="copyAllBtn2" class="btn-copy">复制全部描述</button>
-        <div class="export-split-btn" id="exportSplit2">
-          <button id="exportBtn" class="btn-export-split-main" style="display:flex;align-items:center;justify-content:center;">导出</button>
-          <button class="btn-export-split-arrow" title="选择格式">▾</button>
-          <div class="export-split-menu hidden">
-            <div class="export-split-item active" data-format="txt">TXT · 纯文本</div>
-            <div class="export-split-item" data-format="md">Markdown · 带标注</div>
-            <div class="export-split-item" data-format="html">HTML · 含缩略图</div>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- Error Section -->
@@ -315,6 +318,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=28"></script>
+  <script src="/js/app.js?v=35"></script>
 </body>
 </html>
