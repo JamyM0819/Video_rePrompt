@@ -574,8 +574,12 @@ router.get('/export/:jobId', (req, res) => {
   } else {
     const lines = [];
     (r.shots || []).forEach((shot, i) => {
+      const time = `${String(Math.floor(shot.startTime/60)).padStart(2,'0')}:${String(Math.floor(shot.startTime%60)).padStart(2,'0')}-${String(Math.floor(shot.endTime/60)).padStart(2,'0')}:${String(Math.floor(shot.endTime%60)).padStart(2,'0')}`;
+      lines.push(`── 镜头 ${i+1} · ${time} · ${(shot.duration||0).toFixed(1)}s ──`);
+      lines.push('');
       if (shot.description) lines.push(shot.description);
       if (shot.audioDescription) lines.push('\n[台词] ' + shot.audioDescription);
+      lines.push('');
       if (i < r.shots.length - 1) lines.push('');
     });
     content = '﻿' + lines.join('\n');
